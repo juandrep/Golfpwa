@@ -21,6 +21,7 @@ export function MapScreen() {
     const tile = tileSources.find((t) => t.id === tileSourceId) ?? tileSources[0];
     mapRef.current = new maplibregl.Map({
       container: mapEl.current,
+      attributionControl: {},
       style: {
         version: 8,
         sources: { osm: { type: 'raster', tiles: [tile.urlTemplate], tileSize: 256, attribution: tile.attribution } },
