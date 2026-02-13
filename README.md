@@ -1,17 +1,47 @@
 # GreenCaddie
 
-Mobile-first, offline-first golf GPS + scorecard PWA.
+GreenCaddie is a mobile-first, offline-first golf GPS + scorecard PWA built with free/open-source services only.
 
-## Current status
-This commit includes:
-- Initial React + TypeScript app skeleton
-- `/src/domain` types and pure scoring/distance/stats functions
-- `/src/data` Dexie database + repositories
-- Built-in 18-hole demo course seed
+## Stack
+- React + TypeScript + Vite
+- Tailwind CSS
+- Zustand
+- Dexie (IndexedDB)
+- MapLibre GL JS + OSM tile sources
+- Vite PWA plugin (Workbox)
 
-## Run
-1. Install dependencies: `npm install`
-2. Start dev server: `npm run dev`
-3. Build: `npm run build`
+## Features
+- Courses:
+  - built-in 18-hole demo course
+  - create course with manual base coordinates
+- Round + scorecard:
+  - start/resume active round
+  - per-hole stroke entry
+  - Stableford toggle
+- Map mode:
+  - geolocation tracking
+  - distances to green front/middle/back
+  - tap-to-measure distance
+  - hazard distance readout
+- History + stats:
+  - past rounds list
+  - avg score, putts/round, GIR%, FIR%, penalty trend
+- Settings:
+  - meters/yards toggle
+  - tile source switcher
 
-> Note: package installation was blocked in the current execution environment, so dependency install/build could not be run here.
+## Docs
+- `docs/decisions.md`
+- `docs/offline.md`
+- `docs/map.md`
+- `docs/runbook.md`
+- `docs/roadmap.md`
+
+## Commands
+1. `npm install`
+2. `npm run dev`
+3. `npm test`
+4. `npm run build`
+
+## Offline test
+Follow `docs/runbook.md` → Offline verification section.

@@ -1,13 +1,12 @@
 # Architecture decisions
 
-## Defaults selected without blocking questions
-- Project name: **GreenCaddie**.
-- Bootstrapped a Vite + React + TypeScript project structure manually due package registry access restrictions in this environment.
-- Domain-first structure added at `/src/domain` with pure functions and typed entities.
-- Data layer uses Dexie/IndexedDB repositories in `/src/data`.
-- Added a built-in 18-hole demo course to ensure immediate offline usability on first launch.
+## Defaults selected
+- Stack: React + TypeScript + Vite + Tailwind + Zustand + Dexie + MapLibre.
+- Open/free mapping only; no proprietary map keys.
+- Bottom-tab mobile shell with shared UI primitives.
+- IndexedDB is source of truth for all user data.
+- Stableford toggle follows simple score delta rules with unit tests.
 
-## Next implementation phases
-- Add Tailwind design system + shared UI components.
-- Add feature slices for courses, round, map, history, settings.
-- Add PWA service worker + runtime map tile caching strategy.
+## Practical compromises in this environment
+- NPM registry access is blocked in this execution environment, so dependencies cannot be installed or executed locally here.
+- Implementation is completed in code, but runtime validation commands that require installed deps will fail until install is possible.
