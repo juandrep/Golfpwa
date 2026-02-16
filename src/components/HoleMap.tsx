@@ -45,10 +45,13 @@ export function HoleMap({ hole }: { hole: HoleMapData }) {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [gpsCoordinates, setGpsCoordinates] = useState<GpsCoordinates | null>(null);
   const [gpsMessage, setGpsMessage] = useState<string>('');
+  const [usesNativeFullscreen, setUsesNativeFullscreen] = useState(false);
 
   useEffect(() => {
     const onFullscreenChange = () => {
-      setIsFullscreen(Boolean(document.fullscreenElement));
+      const fullscreenActive = Boolean(document.fullscreenElement);
+      setUsesNativeFullscreen(fullscreenActive);
+      setIsFullscreen(fullscreenActive);
     };
 
     document.addEventListener('fullscreenchange', onFullscreenChange);
@@ -56,6 +59,18 @@ export function HoleMap({ hole }: { hole: HoleMapData }) {
       document.removeEventListener('fullscreenchange', onFullscreenChange);
     };
   }, []);
+
+  useEffect(() => {
+    if (!isFullscreen || usesNativeFullscreen) {
+      document.body.style.removeProperty('overflow');
+      return;
+    }
+
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.removeProperty('overflow');
+    };
+  }, [isFullscreen, usesNativeFullscreen]);
 
   useEffect(() => {
     setBallPoint(null);
@@ -140,15 +155,38 @@ export function HoleMap({ hole }: { hole: HoleMapData }) {
   const toggleFullscreen = async () => {
     if (!mapRef.current) return;
 
+    if (isFullscreen && !usesNativeFullscreen) {
+      setIsFullscreen(false);
+      return;
+    }
+
     if (!document.fullscreenElement) {
-      await mapRef.current.requestFullscreen();
+      try {
+        if (typeof mapRef.current.requestFullscreen === 'function') {
+          await mapRef.current.requestFullscreen();
+          setUsesNativeFullscreen(true);
+          setIsFullscreen(true);
+          return;
+        }
+      } catch {
+        // Ignore fullscreen API failures and use the CSS fallback mode below.
+      }
+
+      setUsesNativeFullscreen(false);
       setIsFullscreen(true);
       return;
     }
 
     await document.exitFullscreen();
+    setUsesNativeFullscreen(false);
     setIsFullscreen(false);
   };
+
+  const fullscreenContainerClass = isFullscreen
+    ? usesNativeFullscreen
+      ? 'h-[100dvh] w-full rounded-none'
+      : 'fixed inset-0 z-50 h-[100dvh] w-screen rounded-none bg-black'
+    : '';
 
   const enableGps = () => {
     if (!navigator.geolocation) {
@@ -192,7 +230,7 @@ export function HoleMap({ hole }: { hole: HoleMapData }) {
     <div className="space-y-3">
       <div
         ref={mapRef}
-        className={`relative overflow-hidden rounded-xl bg-black/5 ${isFullscreen ? 'h-[100dvh] w-full rounded-none' : ''}`}
+        className={`relative overflow-hidden rounded-xl bg-black/5 ${fullscreenContainerClass}`}
         onClick={handleMapClick}
       >
         <img
