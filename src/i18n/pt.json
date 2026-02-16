@@ -1,0 +1,109 @@
+{
+  "app": {
+    "name": "Leaderboard Pestana Golf"
+  },
+  "nav": {
+    "home": "Início",
+    "enterScore": "Inserir Resultado",
+    "leaderboard": "Classificação",
+    "courseMap": "Mapa do Campo",
+    "profile": "Perfil",
+    "logout": "Terminar Sessão"
+  },
+  "language": {
+    "switch": "Idioma",
+    "en": "Inglês",
+    "pt": "Português"
+  },
+  "home": {
+    "welcome": "Bem-vindo de volta",
+    "quickActions": "Ações Rápidas",
+    "viewLeaderboard": "Ver Classificação",
+    "addScore": "Adicionar Resultado",
+    "viewCourseMap": "Ver Mapa do Campo"
+  },
+  "score": {
+    "title": "Inserir Volta",
+    "selectCourse": "Selecionar Campo",
+    "selectDate": "Data",
+    "selectTees": "Selecionar Tees",
+    "totalScore": "Resultado Total",
+    "holeByHole": "Inserir buraco a buraco",
+    "save": "Guardar Volta",
+    "saving": "A guardar...",
+    "success": "Volta guardada com sucesso",
+    "validationScore": "Insira um resultado válido (50–200).",
+    "validationHoles": "Os resultados por buraco devem ser entre 1 e 20."
+  },
+  "leaderboard": {
+    "title": "Classificação",
+    "thisWeek": "Esta Semana",
+    "thisMonth": "Este Mês",
+    "allTime": "Todos os Tempos",
+    "allPlayers": "Todos",
+    "members": "Sócios",
+    "visitors": "Visitantes",
+    "combined": "Combinado",
+    "position": "Posição",
+    "player": "Jogador",
+    "bestScore": "Melhor Resultado",
+    "rounds": "Voltas",
+    "noData": "Ainda não existem resultados neste período.",
+    "you": "Você"
+  },
+  "tiers": {
+    "bronze": "Bronze",
+    "silver": "Prata",
+    "gold": "Ouro",
+    "platinum": "Platina"
+  },
+  "profile": {
+    "title": "O Meu Perfil",
+    "editProfile": "Editar Perfil",
+    "displayName": "Nome de Exibição",
+    "role": "Função",
+    "member": "Sócio",
+    "visitor": "Visitante",
+    "roundsPlayed": "Voltas Jogadas",
+    "bestScore": "Melhor Resultado",
+    "averageScore": "Resultado Médio",
+    "statsByCourse": "Estatísticas por Campo",
+    "updateSuccess": "Perfil atualizado com sucesso"
+  },
+  "courseMap": {
+    "title": "Mapa do Campo",
+    "selectCourse": "Selecionar Campo",
+    "selectHole": "Selecionar Buraco",
+    "par": "Par",
+    "strokeIndex": "Índice",
+    "yardage": "Distância",
+    "green": "Green",
+    "teeWhite": "Tee Branco",
+    "teeYellow": "Tee Amarelo",
+    "teeRed": "Tee Vermelho",
+    "noHoleData": "Informação do buraco não disponível."
+  },
+  "empty": {
+    "noRounds": "Ainda não existem voltas. Adicione o seu primeiro resultado!",
+    "noLeaderboard": "Ainda não existem jogadores classificados.",
+    "noStats": "Ainda não existem estatísticas disponíveis."
+  },
+  "toast": {
+    "scoreSaved": "O seu resultado foi guardado.",
+    "profileUpdated": "Perfil atualizado.",
+    "languageUpdated": "Idioma atualizado.",
+    "movedUp": "Subiu na classificação!"
+  },
+  "errors": {
+    "generic": "Algo correu mal. Tente novamente.",
+    "permission": "Não tem permissão para realizar esta ação.",
+    "network": "Erro de rede. Verifique a sua ligação."
+  },
+  "buttons": {
+    "cancel": "Cancelar",
+    "confirm": "Confirmar",
+    "save": "Guardar",
+    "edit": "Editar",
+    "close": "Fechar"
+  }
+}

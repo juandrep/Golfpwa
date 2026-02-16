@@ -3,8 +3,12 @@ import { stablefordPoints } from '../../domain/stableford';
 import { Button, Card, EmptyState, Input, Toggle } from '../../ui/components';
 import { useAppStore } from '../../app/store';
 import type { Round } from '../../domain/types';
+import { useI18n } from '../../app/i18n';
+import { useToast } from '../../app/toast';
 
 export function ScorecardScreen() {
+  const { t } = useI18n();
+  const { showToast } = useToast();
   const { courses, activeRound, saveRound, completeRound } = useAppStore();
 
   const startRound = async () => {
@@ -18,6 +22,7 @@ export function ScorecardScreen() {
       scores: course.holes.map((h) => ({ holeNumber: h.number, strokes: h.par })),
     };
     await saveRound(round, true);
+    showToast(t('toast.scoreSaved'));
   };
 
   const course = useMemo(() => courses.find((c) => c.id === activeRound?.courseId), [courses, activeRound?.courseId]);
@@ -25,8 +30,8 @@ export function ScorecardScreen() {
   if (!activeRound || !course) {
     return (
       <div className="space-y-3">
-        <EmptyState title="No active round" desc="Start a round from your first course." />
-        <Button onClick={startRound}>Start round</Button>
+        <EmptyState title={t('empty.noRounds')} desc={t('score.title')} />
+        <Button onClick={startRound}>{t('score.save')}</Button>
       </div>
     );
   }
@@ -49,19 +54,18 @@ export function ScorecardScreen() {
 
   return (
     <div className="space-y-3 pb-24">
-      {!activeRound && <Button onClick={startRound}>Start round</Button>}
       <Card className="flex items-center justify-between"><span className="font-semibold">Stableford</span><Toggle checked={activeRound.stablefordEnabled} onChange={toggleStableford} /></Card>
       {activeRound.scores.map((s) => (
         <Card key={s.holeNumber} className="flex items-center gap-3">
-          <strong className="w-12">H{s.holeNumber}</strong>
+          <strong className="w-12 text-lg">H{s.holeNumber}</strong>
           <Input type="number" min={1} value={s.strokes} onChange={(e) => updateHole(s.holeNumber, Number(e.target.value || 0))} />
         </Card>
       ))}
       <Card>
-        <p>Total strokes: <strong>{total}</strong></p>
+        <p>{t('score.totalScore')}: <strong className="text-xl">{total}</strong></p>
         {activeRound.stablefordEnabled && <p>Stableford: <strong>{stablefordTotal}</strong></p>}
       </Card>
-      <Button onClick={() => completeRound(activeRound)}>Finish round</Button>
+      <Button onClick={async () => { await completeRound(activeRound); showToast(t('toast.scoreSaved')); }}>{t('score.save')}</Button>
     </div>
   );
 }

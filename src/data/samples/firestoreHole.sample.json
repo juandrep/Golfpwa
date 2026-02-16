@@ -1,0 +1,20 @@
+{
+  "path": "courses/vale-da-pinta/holes/1",
+  "number": 1,
+  "par": 4,
+  "strokeIndex": 10,
+  "yardages": {
+    "white": 402,
+    "yellow": 380,
+    "red": 355
+  },
+  "coordinates": {
+    "tees": {
+      "white": { "x": 12, "y": 85 },
+      "yellow": { "x": 18, "y": 88 },
+      "red": { "x": 25, "y": 90 }
+    },
+    "green": { "x": 82, "y": 18 }
+  },
+  "imagePath": "courses/vale-da-pinta/holes/1.png"
+}

@@ -1,0 +1,109 @@
+{
+  "app": {
+    "name": "Pestana Golf Leaderboard"
+  },
+  "nav": {
+    "home": "Home",
+    "enterScore": "Enter Score",
+    "leaderboard": "Leaderboard",
+    "courseMap": "Course Map",
+    "profile": "Profile",
+    "logout": "Logout"
+  },
+  "language": {
+    "switch": "Language",
+    "en": "English",
+    "pt": "Portuguese"
+  },
+  "home": {
+    "welcome": "Welcome back",
+    "quickActions": "Quick Actions",
+    "viewLeaderboard": "View Leaderboard",
+    "addScore": "Add New Score",
+    "viewCourseMap": "View Course Map"
+  },
+  "score": {
+    "title": "Enter Round",
+    "selectCourse": "Select Course",
+    "selectDate": "Date",
+    "selectTees": "Select Tees",
+    "totalScore": "Total Score",
+    "holeByHole": "Enter hole-by-hole",
+    "save": "Save Round",
+    "saving": "Saving...",
+    "success": "Round saved successfully",
+    "validationScore": "Please enter a valid score (50–200).",
+    "validationHoles": "Hole scores must be between 1 and 20."
+  },
+  "leaderboard": {
+    "title": "Leaderboard",
+    "thisWeek": "This Week",
+    "thisMonth": "This Month",
+    "allTime": "All Time",
+    "allPlayers": "All Players",
+    "members": "Members",
+    "visitors": "Visitors",
+    "combined": "Combined",
+    "position": "Position",
+    "player": "Player",
+    "bestScore": "Best Score",
+    "rounds": "Rounds",
+    "noData": "No scores yet for this period.",
+    "you": "You"
+  },
+  "tiers": {
+    "bronze": "Bronze",
+    "silver": "Silver",
+    "gold": "Gold",
+    "platinum": "Platinum"
+  },
+  "profile": {
+    "title": "My Profile",
+    "editProfile": "Edit Profile",
+    "displayName": "Display Name",
+    "role": "Role",
+    "member": "Member",
+    "visitor": "Visitor",
+    "roundsPlayed": "Rounds Played",
+    "bestScore": "Best Score",
+    "averageScore": "Average Score",
+    "statsByCourse": "Stats by Course",
+    "updateSuccess": "Profile updated successfully"
+  },
+  "courseMap": {
+    "title": "Course Map",
+    "selectCourse": "Select Course",
+    "selectHole": "Select Hole",
+    "par": "Par",
+    "strokeIndex": "Stroke Index",
+    "yardage": "Yardage",
+    "green": "Green",
+    "teeWhite": "White Tee",
+    "teeYellow": "Yellow Tee",
+    "teeRed": "Red Tee",
+    "noHoleData": "Hole information not available."
+  },
+  "empty": {
+    "noRounds": "No rounds yet. Add your first score!",
+    "noLeaderboard": "No players ranked yet.",
+    "noStats": "No statistics available yet."
+  },
+  "toast": {
+    "scoreSaved": "Your score has been saved.",
+    "profileUpdated": "Profile updated.",
+    "languageUpdated": "Language updated.",
+    "movedUp": "You moved up in the rankings!"
+  },
+  "errors": {
+    "generic": "Something went wrong. Please try again.",
+    "permission": "You do not have permission to perform this action.",
+    "network": "Network error. Please check your connection."
+  },
+  "buttons": {
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "save": "Save",
+    "edit": "Edit",
+    "close": "Close"
+  }
+}
