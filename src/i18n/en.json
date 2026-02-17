@@ -18,6 +18,10 @@
   "home": {
     "welcome": "Welcome back",
     "quickActions": "Quick Actions",
+    "mobileWelcome": "Track rounds faster and access tools with one thumb.",
+    "rounds": "Rounds",
+    "active": "Active",
+    "courses": "Courses",
     "viewLeaderboard": "View Leaderboard",
     "addScore": "Add New Score",
     "viewCourseMap": "View Course Map"
