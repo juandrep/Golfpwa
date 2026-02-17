@@ -18,6 +18,10 @@
   "home": {
     "welcome": "Bem-vindo de volta",
     "quickActions": "Ações Rápidas",
+    "mobileWelcome": "Acompanhe voltas mais rápido e aceda às ferramentas com um só polegar.",
+    "rounds": "Voltas",
+    "active": "Ativa",
+    "courses": "Campos",
     "viewLeaderboard": "Ver Classificação",
     "addScore": "Adicionar Resultado",
     "viewCourseMap": "Ver Mapa do Campo"
