@@ -62,8 +62,21 @@ function AppShell() {
     );
   }, [navigate, pathname, t]);
 
+  const activeNav = navItems.find((item) => item.path === pathname) ?? navItems[0];
+
   return (
-    <main className="mx-auto min-h-screen max-w-6xl px-4 pb-24 pt-4 sm:px-6">
+    <main className="mx-auto min-h-screen max-w-6xl px-3 pb-28 pt-3 sm:px-6 sm:pb-24 sm:pt-4">
+      <header className="mb-3 flex items-center justify-between rounded-xl border border-gray-200 bg-white px-3 py-2 shadow-sm md:hidden">
+        <div>
+          <p className="text-xs uppercase tracking-wide text-gray-500">{t('app.name')}</p>
+          <h1 className="text-base font-semibold leading-tight">{t(`nav.${activeNav.key}`)}</h1>
+        </div>
+        <select className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-sm" value={locale} onChange={(event) => setLocale(event.target.value as 'en' | 'pt')}>
+          <option value="en">EN</option>
+          <option value="pt">PT</option>
+        </select>
+      </header>
+
       <header className="mb-4 hidden items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm md:flex">
         <h1 className="text-xl font-semibold">{t('app.name')}</h1>
         <nav className="flex gap-1">
@@ -85,9 +98,9 @@ function AppShell() {
         content
       )}
 
-      <nav className="fixed inset-x-0 bottom-0 mx-auto grid max-w-6xl grid-cols-5 gap-1 border-t border-gray-200 bg-white p-2 md:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-20 mx-auto grid max-w-6xl grid-cols-5 gap-1 border-t border-gray-200 bg-white/95 p-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] shadow-[0_-8px_20px_rgba(0,0,0,0.08)] backdrop-blur md:hidden">
         {navItems.map((item) => (
-          <button key={item.path} onClick={() => navigate(item.path)} className={`rounded-lg py-2 text-xs ${pathname === item.path ? 'bg-emerald-700 text-white' : 'text-gray-600'}`}>
+          <button key={item.path} onClick={() => navigate(item.path)} className={`rounded-lg px-1 py-2 text-[11px] font-medium leading-tight ${pathname === item.path ? 'bg-emerald-700 text-white' : 'text-gray-600'}`}>
             {t(`nav.${item.key}`)}
           </button>
         ))}
