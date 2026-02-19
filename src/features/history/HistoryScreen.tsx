@@ -11,9 +11,9 @@ function initialsFromName(name: string): string {
 }
 
 function podiumTone(position: number): string {
-  if (position === 1) return 'from-amber-300 via-amber-400 to-amber-500';
-  if (position === 2) return 'from-slate-200 via-slate-300 to-slate-400';
-  return 'from-orange-300 via-orange-400 to-orange-500';
+  if (position === 1) return 'from-amber-200 via-amber-300 to-amber-400';
+  if (position === 2) return 'from-gray-200 via-gray-300 to-gray-400';
+  return 'from-orange-200 via-orange-300 to-orange-400';
 }
 
 export function HistoryScreen() {
@@ -112,9 +112,9 @@ export function HistoryScreen() {
       ) : null}
 
       {topThree.length > 0 ? (
-        <Card className="overflow-hidden border-0 bg-gradient-to-b from-slate-900 via-slate-900 to-slate-800 p-4 text-white">
+        <Card className="overflow-hidden border-emerald-200 bg-gradient-to-b from-emerald-100 via-emerald-50 to-white p-4 text-gray-900">
           <div className="mb-3 flex items-center justify-center">
-            <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-amber-200">
+            <span className="rounded-full bg-emerald-700 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-white">
               Top 3
             </span>
           </div>
@@ -123,14 +123,17 @@ export function HistoryScreen() {
               if (!entry) return <div key={`empty-${idx}`} />;
               const isFirst = entry.position === 1;
               return (
-                <div key={entry.uid} className={`rounded-xl bg-white/5 p-2 text-center ${isFirst ? 'pb-4' : 'pb-2'}`}>
-                  <div className={`mx-auto mb-2 grid h-12 w-12 place-items-center rounded-full bg-gradient-to-br text-sm font-bold text-slate-900 ${podiumTone(entry.position)}`}>
+                <div
+                  key={entry.uid}
+                  className={`rounded-xl border border-emerald-100 bg-white p-2 text-center shadow-sm ${isFirst ? 'pb-4 ring-1 ring-emerald-200' : 'pb-2'}`}
+                >
+                  <div className={`mx-auto mb-2 grid h-12 w-12 place-items-center rounded-full bg-gradient-to-br text-sm font-bold text-gray-900 ${podiumTone(entry.position)}`}>
                     {initialsFromName(entry.displayName)}
                   </div>
-                  <p className="truncate text-xs font-medium text-slate-200">{entry.displayName}</p>
-                  <p className="mt-1 text-lg font-bold text-white">{entry.bestScore}</p>
-                  <p className="text-[10px] uppercase tracking-[0.12em] text-slate-400">Best Score</p>
-                  <p className="mt-1 text-[10px] font-semibold text-emerald-300">#{entry.position}</p>
+                  <p className="truncate text-xs font-semibold text-gray-800">{entry.displayName}</p>
+                  <p className="mt-1 text-lg font-bold text-emerald-900">{entry.bestScore}</p>
+                  <p className="text-[10px] uppercase tracking-[0.12em] text-gray-500">Best Score</p>
+                  <p className="mt-1 text-[10px] font-semibold text-emerald-700">#{entry.position}</p>
                 </div>
               );
             })}
@@ -147,7 +150,7 @@ export function HistoryScreen() {
               className={`flex items-center justify-between ${isCurrentUser ? 'border-emerald-300 bg-emerald-50' : 'border-gray-200 bg-white'}`}
             >
               <div className="flex items-center gap-3">
-                <div className="grid h-10 w-10 place-items-center rounded-full bg-slate-100 text-xs font-bold text-slate-700">
+                <div className="grid h-10 w-10 place-items-center rounded-full bg-emerald-100 text-xs font-bold text-emerald-800">
                   {initialsFromName(entry.displayName)}
                 </div>
                 <div>
