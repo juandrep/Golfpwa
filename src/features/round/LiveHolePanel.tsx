@@ -813,7 +813,7 @@ export function LiveHolePanel({ hole, teeOption = null }: Props) {
           ) : null}
         </div>
 
-        <div className="absolute inset-x-0 bottom-20 z-10 px-2 sm:hidden">
+        <div className="absolute inset-x-0 top-2 z-10 px-2 sm:hidden">
           <div className="flex items-center gap-1 overflow-x-auto rounded-xl bg-black/55 p-1.5 text-white backdrop-blur [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <button
               type="button"

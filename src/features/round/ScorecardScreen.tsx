@@ -91,6 +91,7 @@ export function ScorecardScreen() {
   const [feedbackRoundMeta, setFeedbackRoundMeta] = useState<{ roundId: string; courseId: string } | null>(null);
   const [feedbackSending, setFeedbackSending] = useState(false);
   const swipeStartRef = useRef<{ x: number; y: number; at: number } | null>(null);
+  const liveHoleTopRef = useRef<HTMLDivElement | null>(null);
 
   const startRound = async () => {
     const course = selectedCourse;
@@ -260,6 +261,17 @@ export function ScorecardScreen() {
     setSelectedTeeId(nextSuggestedTee?.id ?? '');
   }, [activeRound, handicapValue, selectedCourse]);
 
+  useEffect(() => {
+    if (!activeRound) return;
+    window.requestAnimationFrame(() => {
+      if (liveHoleTopRef.current) {
+        liveHoleTopRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return;
+      }
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  }, [activeRound?.id, currentHoleNumber]);
+
   return (
     <div className={`space-y-3 ${activeRound ? 'pb-28 md:pb-64' : 'pb-24'}`}>
       {!activeRound ? (
@@ -314,6 +326,7 @@ export function ScorecardScreen() {
         <EmptyState title={t('empty.noRounds')} desc={t('score.title')} />
       ) : (
         <>
+          <div ref={liveHoleTopRef} />
           <div key={`live-hole-${currentHoleNumber}`} className="hole-fade-in">
             <LiveHolePanel hole={currentHoleData} teeOption={activeTeeOption} />
           </div>
