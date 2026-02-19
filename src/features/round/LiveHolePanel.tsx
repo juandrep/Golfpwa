@@ -744,7 +744,7 @@ export function LiveHolePanel({ hole, teeOption = null }: Props) {
       <div className="relative overflow-hidden rounded-2xl border border-stone-300 shadow-md">
         <div
           ref={mapContainerRef}
-          className={`live-hole-map-surface h-[62vh] min-h-[360px] max-h-[560px] overflow-hidden ${holeTransitioning ? 'is-loading' : ''}`}
+          className={`live-hole-map-surface h-[56vh] min-h-[300px] max-h-[520px] overflow-hidden sm:h-[62vh] sm:min-h-[360px] sm:max-h-[560px] ${holeTransitioning ? 'is-loading' : ''}`}
         />
         <div className={`live-hole-loading-overlay ${holeTransitioning ? 'is-visible' : ''}`} aria-hidden={!holeTransitioning}>
           <div className="live-hole-loading-panel">
@@ -755,7 +755,7 @@ export function LiveHolePanel({ hole, teeOption = null }: Props) {
           </div>
         </div>
 
-        <div className="absolute inset-x-0 top-0 flex items-center justify-between bg-gradient-to-b from-black/65 to-transparent px-3 py-2">
+        <div className="absolute inset-x-0 top-0 hidden items-center justify-between bg-gradient-to-b from-black/65 to-transparent px-3 py-2 sm:flex">
           <div className="rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-stone-800">
             Pin Sheet
           </div>
@@ -769,7 +769,7 @@ export function LiveHolePanel({ hole, teeOption = null }: Props) {
           </div>
         </div>
 
-        <div className="absolute left-2 top-12 z-10 space-y-2">
+        <div className="absolute left-2 top-12 z-10 hidden space-y-2 sm:block">
           <div className="flex items-center gap-2 rounded-lg bg-black/45 px-2 py-1.5 text-white backdrop-blur">
             <span className="text-[10px] uppercase tracking-wide text-stone-200">North</span>
             <Toggle checked={lockNorth} onChange={setLockNorth} />
@@ -780,7 +780,7 @@ export function LiveHolePanel({ hole, teeOption = null }: Props) {
           </div>
         </div>
 
-        <div className="absolute right-2 top-12 z-10 space-y-2">
+        <div className="absolute right-2 top-12 z-10 hidden space-y-2 sm:block">
           <button
             type="button"
             className="rounded-lg bg-black/45 px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-white backdrop-blur"
@@ -813,27 +813,92 @@ export function LiveHolePanel({ hole, teeOption = null }: Props) {
           ) : null}
         </div>
 
+        <div className="absolute inset-x-0 bottom-20 z-10 px-2 sm:hidden">
+          <div className="flex items-center gap-1 overflow-x-auto rounded-xl bg-black/55 p-1.5 text-white backdrop-blur [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <button
+              type="button"
+              className={`shrink-0 rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-wide ${lockNorth ? 'bg-emerald-600/90' : 'bg-white/15'}`}
+              onClick={() => setLockNorth((current) => !current)}
+            >
+              North
+            </button>
+            <button
+              type="button"
+              className={`shrink-0 rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-wide ${followMe ? 'bg-emerald-600/90' : 'bg-white/15'}`}
+              onClick={() => setFollowMe((current) => !current)}
+            >
+              Follow
+            </button>
+            <button
+              type="button"
+              className="shrink-0 rounded-md bg-white/15 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide"
+              onClick={recenterNow}
+            >
+              Recenter
+            </button>
+            <button
+              type="button"
+              className="shrink-0 rounded-md bg-white/15 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide"
+              onClick={focusGreenNow}
+            >
+              Green Cam
+            </button>
+            <button
+              type="button"
+              className={`shrink-0 rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-wide ${layupMode ? 'bg-amber-600/90' : 'bg-white/15'}`}
+              onClick={() => setLayupMode((current) => !current)}
+            >
+              {layupMode ? 'Tap Map' : 'Mark Layup'}
+            </button>
+            {layupPoint ? (
+              <button
+                type="button"
+                className="shrink-0 rounded-md bg-white/15 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide"
+                onClick={() => setLayupPoint(null)}
+              >
+                Clear Layup
+              </button>
+            ) : null}
+          </div>
+        </div>
+
         <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/35 to-transparent p-3">
-          <div className="grid grid-cols-4 gap-2 text-center text-white">
+          <div className="grid grid-cols-2 gap-2 text-center text-white sm:grid-cols-4">
             <div className="rounded-lg border border-blue-200/40 bg-blue-500/35 px-2 py-1.5 backdrop-blur-sm">
               <p className="text-[10px] uppercase tracking-[0.14em] text-blue-100">Front</p>
-              <p className="text-sm font-semibold">{frontDistance === null ? '--' : `${toDisplayDistance(frontDistance, unit)} ${unit === 'yards' ? 'y' : 'm'}`}</p>
+              <p className="text-xs font-semibold sm:text-sm">{frontDistance === null ? '--' : `${toDisplayDistance(frontDistance, unit)} ${unit === 'yards' ? 'y' : 'm'}`}</p>
             </div>
             <div className="rounded-lg border border-amber-200/40 bg-amber-500/35 px-2 py-1.5 backdrop-blur-sm">
               <p className="text-[10px] uppercase tracking-[0.14em] text-amber-100">Middle</p>
-              <p className="text-sm font-semibold">{middleDistance === null ? '--' : `${toDisplayDistance(middleDistance, unit)} ${unit === 'yards' ? 'y' : 'm'}`}</p>
+              <p className="text-xs font-semibold sm:text-sm">{middleDistance === null ? '--' : `${toDisplayDistance(middleDistance, unit)} ${unit === 'yards' ? 'y' : 'm'}`}</p>
             </div>
             <div className="rounded-lg border border-red-200/40 bg-red-500/35 px-2 py-1.5 backdrop-blur-sm">
               <p className="text-[10px] uppercase tracking-[0.14em] text-red-100">Back</p>
-              <p className="text-sm font-semibold">{backDistance === null ? '--' : `${toDisplayDistance(backDistance, unit)} ${unit === 'yards' ? 'y' : 'm'}`}</p>
+              <p className="text-xs font-semibold sm:text-sm">{backDistance === null ? '--' : `${toDisplayDistance(backDistance, unit)} ${unit === 'yards' ? 'y' : 'm'}`}</p>
             </div>
             <div className="rounded-lg border border-emerald-200/40 bg-emerald-600/85 px-2 py-1.5">
               <p className="text-[10px] uppercase tracking-[0.14em] text-emerald-100">Club</p>
-              <p className="text-sm font-semibold">{toGreen === null ? '--' : recommendClub(toGreen)}</p>
+              <p className="text-xs font-semibold sm:text-sm">{toGreen === null ? '--' : recommendClub(toGreen)}</p>
             </div>
           </div>
         </div>
       </div>
+
+      <Card className="sm:hidden border-stone-200 bg-stone-50">
+        <div className="flex items-center justify-between gap-2">
+          <p className="rounded-full bg-white px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-700">
+            Pin Sheet
+          </p>
+          <div className="flex items-center gap-1.5">
+            <p className="rounded-full bg-white px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-stone-700">
+              {teeDisplay.label} Tee
+            </p>
+            <p className="rounded-full bg-emerald-600 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-white">
+              {zone}
+            </p>
+          </div>
+        </div>
+      </Card>
 
       {gpsError ? <Card className="border-red-200 text-red-700">{gpsError}</Card> : null}
 

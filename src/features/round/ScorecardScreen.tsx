@@ -261,7 +261,7 @@ export function ScorecardScreen() {
   }, [activeRound, handicapValue, selectedCourse]);
 
   return (
-    <div className={`space-y-3 ${activeRound ? 'pb-64' : 'pb-24'}`}>
+    <div className={`space-y-3 ${activeRound ? 'pb-28 md:pb-64' : 'pb-24'}`}>
       {!activeRound ? (
         <Card className="space-y-3 border-emerald-100 bg-emerald-50">
           <h3 className="text-lg font-semibold">Let's Play</h3>
@@ -316,6 +316,52 @@ export function ScorecardScreen() {
         <>
           <div key={`live-hole-${currentHoleNumber}`} className="hole-fade-in">
             <LiveHolePanel hole={currentHoleData} teeOption={activeTeeOption} />
+          </div>
+
+          <div
+            onTouchStart={handleHoleSwipeStart}
+            onTouchEnd={handleHoleSwipeEnd}
+            className="md:hidden"
+          >
+            <Card className="space-y-2 border-emerald-100 bg-emerald-50 py-2 shadow-md">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-[9px] uppercase tracking-[0.18em] text-emerald-700">Hole Header</p>
+                  <h3 className="text-lg font-semibold leading-tight text-emerald-900">Hole {currentHoleNumber}</h3>
+                </div>
+                <div className="flex gap-1.5">
+                  <Button variant="secondary" className="px-2 py-1 text-xs" onClick={() => void goHole(-1)}>Prev</Button>
+                  <Button variant="secondary" className="px-2 py-1 text-xs" onClick={() => void goHole(1)}>Next</Button>
+                </div>
+              </div>
+              <div className="grid grid-cols-4 gap-1.5 text-center">
+                <div className="rounded-md bg-white px-1.5 py-1">
+                  <p className="text-[9px] uppercase tracking-wide text-gray-500">Par</p>
+                  <p className="text-base font-semibold text-emerald-900">{currentHoleData.par}</p>
+                </div>
+                <div className="rounded-md bg-white px-1.5 py-1">
+                  <p className="text-[9px] uppercase tracking-wide text-gray-500">SI</p>
+                  <p className="text-base font-semibold text-emerald-900">{currentHoleData.strokeIndex ?? '-'}</p>
+                </div>
+                <div className="rounded-md bg-white px-1.5 py-1">
+                  <p className="text-[9px] uppercase tracking-wide text-gray-500">Yards</p>
+                  <p className="text-base font-semibold text-emerald-900">{currentHoleData.lengthYards ?? '-'}</p>
+                </div>
+                <div className="rounded-md bg-white px-1.5 py-1">
+                  <p className="text-[9px] uppercase tracking-wide text-gray-500">Round</p>
+                  <p className="text-base font-semibold text-emerald-900">{currentHoleNumber}/{course.holes.length}</p>
+                </div>
+              </div>
+              <div className="flex items-end justify-between pt-0.5">
+                <div>
+                  <p className="text-xs text-gray-700">{t('score.totalScore')}</p>
+                  <p className="text-xl font-semibold text-emerald-900">{total}</p>
+                </div>
+                {activeRound.stablefordEnabled ? (
+                  <p className="text-xs text-emerald-900">Stableford: <strong>{stablefordTotal}</strong></p>
+                ) : null}
+              </div>
+            </Card>
           </div>
 
           <Card className="flex items-center justify-between">
@@ -381,7 +427,7 @@ export function ScorecardScreen() {
           <div
             onTouchStart={handleHoleSwipeStart}
             onTouchEnd={handleHoleSwipeEnd}
-            className="pointer-events-none fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+4.2rem)] z-30 px-3 sm:px-6 md:bottom-4"
+            className="pointer-events-none fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+4.2rem)] z-30 hidden px-3 sm:px-6 md:bottom-4 md:block"
           >
             <Card className="pointer-events-auto mx-auto max-w-6xl space-y-2 border-emerald-100 bg-emerald-50/95 py-2 shadow-lg backdrop-blur">
               <div className="flex items-center justify-between">
