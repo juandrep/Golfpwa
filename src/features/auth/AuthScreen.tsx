@@ -61,18 +61,18 @@ export function AuthScreen() {
         <div className="absolute inset-0 bg-gradient-to-b from-black/65 via-black/55 to-black/75" />
       </div>
 
-      <Card className="auth-login-card relative z-10 w-full max-w-md overflow-hidden border border-white/25 bg-slate-950/80 p-0 text-gray-200 backdrop-blur-xl">
+      <Card className="auth-login-card relative z-10 w-full max-w-md overflow-hidden border border-emerald-100 bg-white/95 p-0 text-gray-900 backdrop-blur-xl">
         <div className="relative space-y-4 px-6 pt-8">
           <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-emerald-200">GreenCaddie</p>
-            <h1 className="text-3xl font-bold leading-tight tracking-tight text-white sm:text-4xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-emerald-700">GreenCaddie</p>
+            <h1 className="text-3xl font-bold leading-tight tracking-tight text-gray-900 sm:text-4xl">
               Welcome back
               <br />
               <span className="text-emerald-300">to your round</span>
             </h1>
           </div>
 
-          <p className="text-sm leading-relaxed text-gray-300">
+          <p className="text-sm leading-relaxed text-gray-700">
             Sign in to access GPS distances, club guidance, and your synced score history.
           </p>
 
@@ -86,8 +86,8 @@ export function AuthScreen() {
           </div>
         </div>
 
-        <div className="relative mt-8 space-y-4 border-t border-white/20 bg-black/35 px-6 py-6">
-          {error ? <div className="rounded-lg bg-red-500/15 px-4 py-3 text-sm text-red-100">{error}</div> : null}
+        <div className="relative mt-8 space-y-4 border-t border-emerald-100 bg-emerald-50/60 px-6 py-6">
+          {error ? <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
 
           <Button
             onClick={handleGoogleSignIn}
@@ -142,7 +142,7 @@ export function AuthScreen() {
             </span>
           </Button>
 
-          <p className="text-center text-xs text-gray-400">Secure sign-in with Firebase Google provider</p>
+          <p className="text-center text-xs text-gray-500">Secure sign-in with Firebase Google provider</p>
         </div>
       </Card>
     </main>
