@@ -148,10 +148,10 @@ function AppShell() {
         </Card>
 
         <div className="grid gap-3 sm:grid-cols-2">
-          <Card className="border-stone-200 bg-gradient-to-br from-stone-900 to-stone-700 text-white">
-            <p className="text-xs uppercase tracking-wide text-stone-200">My Stuff</p>
+          <Card className="border-emerald-200 bg-gradient-to-br from-emerald-800 to-emerald-900 text-white">
+            <p className="text-xs uppercase tracking-wide text-emerald-100">My Stuff</p>
             <h3 className="mt-1 text-lg font-semibold">Stats, leaderboard, profile</h3>
-            <p className="mt-1 text-sm text-stone-200">See past scores, ranking, and your player profile in one place.</p>
+            <p className="mt-1 text-sm text-emerald-100">See past scores, ranking, and your player profile in one place.</p>
             <Button className="mt-4" variant="secondary" onClick={() => navigate('/my-stuff')}>Open My Stuff</Button>
           </Card>
 

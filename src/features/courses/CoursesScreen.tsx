@@ -71,7 +71,7 @@ function CourseEditor() {
   };
 
   return (
-    <Card>
+    <Card className="border-emerald-100 bg-emerald-50/60">
       <h3 className="mb-2 font-semibold">Create course</h3>
       <div className="space-y-2">
         <Input placeholder="Course name" value={name} onChange={(e) => setName(e.target.value)} />
@@ -81,10 +81,16 @@ function CourseEditor() {
         </div>
         <div className="grid grid-cols-4 gap-1 text-xs">
           {(['front', 'middle', 'back', 'hazard'] as PickTarget[]).map((t) => (
-            <button key={t} onClick={() => setPickTarget(t)} className={`rounded border p-1 ${pickTarget === t ? 'bg-gray-900 text-white' : ''}`}>Pick {t}</button>
+            <button
+              key={t}
+              onClick={() => setPickTarget(t)}
+              className={`rounded border border-gray-200 p-1 font-medium ${pickTarget === t ? 'bg-emerald-700 text-white' : 'bg-white text-gray-700'}`}
+            >
+              Pick {t}
+            </button>
           ))}
         </div>
-        <div ref={mapEl} className="h-48 rounded-xl" />
+        <div ref={mapEl} className="h-48 overflow-hidden rounded-xl border border-gray-200 bg-white" />
         <Button disabled={!name.trim()} onClick={createCourse}>Save course</Button>
       </div>
     </Card>

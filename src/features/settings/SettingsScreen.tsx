@@ -53,13 +53,13 @@ export function SettingsScreen() {
         <label className="mt-3 block text-sm font-medium">{t('profile.role')}</label>
         <div className="mt-1 grid grid-cols-2 gap-2">
           <button
-            className={`rounded-xl border p-2 ${role === 'member' ? 'bg-emerald-700 text-white' : ''}`}
+            className={`rounded-xl border border-gray-200 p-2 text-sm font-medium ${role === 'member' ? 'bg-emerald-700 text-white' : 'bg-white text-gray-700'}`}
             onClick={() => setRole('member')}
           >
             {t('profile.member')}
           </button>
           <button
-            className={`rounded-xl border p-2 ${role === 'visitor' ? 'bg-emerald-700 text-white' : ''}`}
+            className={`rounded-xl border border-gray-200 p-2 text-sm font-medium ${role === 'visitor' ? 'bg-emerald-700 text-white' : 'bg-white text-gray-700'}`}
             onClick={() => setRole('visitor')}
           >
             {t('profile.visitor')}
@@ -68,7 +68,7 @@ export function SettingsScreen() {
 
         <label className="mt-3 block text-sm font-medium">Home Course</label>
         <select
-          className="mt-1 w-full rounded-xl border p-2"
+          className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
           value={homeCourse}
           onChange={(event) => setHomeCourse(event.target.value)}
         >
@@ -115,13 +115,13 @@ export function SettingsScreen() {
         <h3 className="font-semibold">Distance unit</h3>
         <div className="mt-2 grid grid-cols-2 gap-2">
           <button
-            className={`rounded-xl border p-2 ${unit === 'yards' ? 'bg-emerald-700 text-white' : ''}`}
+            className={`rounded-xl border border-gray-200 p-2 text-sm font-medium ${unit === 'yards' ? 'bg-emerald-700 text-white' : 'bg-white text-gray-700'}`}
             onClick={() => void setUnit('yards')}
           >
             Yards
           </button>
           <button
-            className={`rounded-xl border p-2 ${unit === 'meters' ? 'bg-emerald-700 text-white' : ''}`}
+            className={`rounded-xl border border-gray-200 p-2 text-sm font-medium ${unit === 'meters' ? 'bg-emerald-700 text-white' : 'bg-white text-gray-700'}`}
             onClick={() => void setUnit('meters')}
           >
             Meters
@@ -132,7 +132,7 @@ export function SettingsScreen() {
       <Card>
         <h3 className="font-semibold">Tile source</h3>
         <select
-          className="mt-2 w-full rounded-xl border p-2"
+          className="mt-2 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
           value={tileSourceId}
           onChange={(event) => void setTileSource(event.target.value)}
         >

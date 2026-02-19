@@ -34,20 +34,20 @@ export function MyStuffScreen({ onNavigate }: Props) {
 
   return (
     <div className="space-y-3 pb-24">
-      <Card className="bg-gradient-to-br from-stone-900 to-stone-700 text-white">
-        <p className="text-xs uppercase tracking-[0.16em] text-stone-200">My Stuff</p>
+      <Card className="bg-gradient-to-br from-emerald-800 to-emerald-900 text-white">
+        <p className="text-xs uppercase tracking-[0.16em] text-emerald-100">My Stuff</p>
         <h2 className="mt-1 text-xl font-semibold">{profile?.displayName ?? 'Player'} dashboard</h2>
         <div className="mt-4 grid grid-cols-3 gap-2 text-center">
           <div className="rounded-lg bg-white/10 p-2">
-            <p className="text-[11px] uppercase tracking-wide text-stone-200">Rounds</p>
+            <p className="text-[11px] uppercase tracking-wide text-emerald-100">Rounds</p>
             <p className="text-lg font-semibold">{stats.rounds}</p>
           </div>
           <div className="rounded-lg bg-white/10 p-2">
-            <p className="text-[11px] uppercase tracking-wide text-stone-200">Best</p>
+            <p className="text-[11px] uppercase tracking-wide text-emerald-100">Best</p>
             <p className="text-lg font-semibold">{stats.best}</p>
           </div>
           <div className="rounded-lg bg-white/10 p-2">
-            <p className="text-[11px] uppercase tracking-wide text-stone-200">Average</p>
+            <p className="text-[11px] uppercase tracking-wide text-emerald-100">Average</p>
             <p className="text-lg font-semibold">{stats.avg}</p>
           </div>
         </div>
