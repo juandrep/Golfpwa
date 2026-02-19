@@ -61,7 +61,7 @@ export function AuthScreen() {
         <div className="absolute inset-0 bg-gradient-to-b from-black/65 via-black/55 to-black/75" />
       </div>
 
-      <Card className="auth-login-card relative z-10 w-full max-w-md overflow-hidden border border-white/25 bg-slate-950/55 p-0 text-white backdrop-blur-xl">
+      <Card className="auth-login-card relative z-10 w-full max-w-md overflow-hidden border border-white/25 bg-slate-950/80 p-0 text-gray-200 backdrop-blur-xl">
         <div className="relative space-y-4 px-6 pt-8">
           <div className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-emerald-200">GreenCaddie</p>
@@ -72,7 +72,7 @@ export function AuthScreen() {
             </h1>
           </div>
 
-          <p className="text-sm leading-relaxed text-white/95">
+          <p className="text-sm leading-relaxed text-gray-300">
             Sign in to access GPS distances, club guidance, and your synced score history.
           </p>
 
@@ -142,7 +142,7 @@ export function AuthScreen() {
             </span>
           </Button>
 
-          <p className="text-center text-xs text-white/65">Secure sign-in with Firebase Google provider</p>
+          <p className="text-center text-xs text-gray-400">Secure sign-in with Firebase Google provider</p>
         </div>
       </Card>
     </main>
