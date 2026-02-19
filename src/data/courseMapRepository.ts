@@ -10,16 +10,19 @@ export interface FirestoreHoleDocument {
     white: number;
     yellow: number;
     red?: number;
+    orange?: number;
   };
   coordinates: {
     tees: {
       white: { x: number; y: number };
       yellow: { x: number; y: number };
       red?: { x: number; y: number };
+      orange?: { x: number; y: number };
     };
     green: { x: number; y: number };
   };
   imagePath: string;
+  layoutSummary?: string;
 }
 
 function wait(ms: number) {

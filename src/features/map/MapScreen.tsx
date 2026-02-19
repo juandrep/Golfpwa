@@ -5,6 +5,7 @@ import { haversineMeters } from '../../domain/distance';
 import { toDisplayDistance } from '../../domain/units';
 import { Card, EmptyState } from '../../ui/components';
 import { tileSources, useAppStore } from '../../app/store';
+import { buildRasterMapStyle, MAP_MAX_ZOOM } from '../../app/mapStyle';
 
 export function MapScreen() {
   const courses = useAppStore((s) => s.courses);
@@ -21,13 +22,12 @@ export function MapScreen() {
     const tile = tileSources.find((t) => t.id === tileSourceId) ?? tileSources[0];
     mapRef.current = new maplibregl.Map({
       container: mapEl.current,
-      style: {
-        version: 8,
-        sources: { osm: { type: 'raster', tiles: [tile.urlTemplate], tileSize: 256, attribution: tile.attribution } },
-        layers: [{ id: 'osm', type: 'raster', source: 'osm' }],
-      },
+      style: buildRasterMapStyle(tile),
       center: [-122.68, 45.52],
       zoom: 14,
+      maxZoom: MAP_MAX_ZOOM,
+      pitch: 28,
+      bearing: -12,
     });
 
     mapRef.current.on('click', (e) => {

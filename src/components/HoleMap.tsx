@@ -110,6 +110,17 @@ export function HoleMap({ hole }: { hole: HoleMapData }) {
       });
     }
 
+    if (hole.coordinates.tees.orange && hole.yardages.orange) {
+      teeMarkers.push({
+        id: 'orange',
+        label: t('courseMap.teeOrange'),
+        colorClass: 'bg-orange-400 border border-orange-500',
+        x: hole.coordinates.tees.orange.x,
+        y: hole.coordinates.tees.orange.y,
+        description: `${t('courseMap.teeOrange')} – ${hole.yardages.orange}m`,
+      });
+    }
+
     teeMarkers.push({
       id: 'green',
       label: t('courseMap.green'),
@@ -125,16 +136,16 @@ export function HoleMap({ hole }: { hole: HoleMapData }) {
   const activeMarker = markers.find((marker) => marker.id === activeMarkerId);
 
   const teeReference = useMemo(() => {
-    const tees = [hole.coordinates.tees.white, hole.coordinates.tees.yellow, hole.coordinates.tees.red].filter(Boolean);
+    const tees = [hole.coordinates.tees.white, hole.coordinates.tees.yellow, hole.coordinates.tees.red, hole.coordinates.tees.orange].filter(Boolean);
     const avgX = tees.reduce((sum, tee) => sum + (tee?.x ?? 0), 0) / tees.length;
     const avgY = tees.reduce((sum, tee) => sum + (tee?.y ?? 0), 0) / tees.length;
     return { x: avgX, y: avgY };
-  }, [hole.coordinates.tees.red, hole.coordinates.tees.white, hole.coordinates.tees.yellow]);
+  }, [hole.coordinates.tees.orange, hole.coordinates.tees.red, hole.coordinates.tees.white, hole.coordinates.tees.yellow]);
 
   const referenceYardage = useMemo(() => {
-    const yardages = [hole.yardages.white, hole.yardages.yellow, hole.yardages.red].filter(Boolean) as number[];
+    const yardages = [hole.yardages.white, hole.yardages.yellow, hole.yardages.red, hole.yardages.orange].filter(Boolean) as number[];
     return Math.round(yardages.reduce((sum, value) => sum + value, 0) / yardages.length);
-  }, [hole.yardages.red, hole.yardages.white, hole.yardages.yellow]);
+  }, [hole.yardages.orange, hole.yardages.red, hole.yardages.white, hole.yardages.yellow]);
 
   const ballAdvice = useMemo(() => {
     if (!ballPoint) return null;

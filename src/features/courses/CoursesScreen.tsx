@@ -4,10 +4,12 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import type { Course, Hole } from '../../domain/types';
 import { Button, Card, EmptyState, Input } from '../../ui/components';
 import { tileSources, useAppStore } from '../../app/store';
+import { buildRasterMapStyle, MAP_MAX_ZOOM } from '../../app/mapStyle';
 
 const emptyHole = (number: number): Hole => ({
   number,
   par: 4,
+  tee: { lat: 45.5188, lng: -122.6807 },
   green: {
     front: { lat: 45.52, lng: -122.68 },
     middle: { lat: 45.5202, lng: -122.6798 },
@@ -35,9 +37,10 @@ function CourseEditor() {
     const tile = tileSources.find((t) => t.id === tileSourceId) ?? tileSources[0];
     mapRef.current = new maplibregl.Map({
       container: mapEl.current,
-      style: { version: 8, sources: { osm: { type: 'raster', tiles: [tile.urlTemplate], tileSize: 256, attribution: tile.attribution } }, layers: [{ id: 'osm', type: 'raster', source: 'osm' }] },
+      style: buildRasterMapStyle(tile),
       center: [Number(lng), Number(lat)],
       zoom: 15,
+      maxZoom: MAP_MAX_ZOOM,
     });
     mapRef.current.on('click', (e) => {
       const point = { lat: e.lngLat.lat, lng: e.lngLat.lng };
@@ -54,6 +57,7 @@ function CourseEditor() {
       name,
       holes: Array.from({ length: 18 }, (_, i) => {
         const h = emptyHole(i + 1);
+        h.tee = { lat: picked.front.lat - 0.0007, lng: picked.front.lng - 0.0005 };
         h.green = picked;
         if (hazard) h.hazards = [{ id: `h-${i + 1}`, name: 'Placed hazard', type: 'other', location: hazard }];
         return h;

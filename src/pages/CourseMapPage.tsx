@@ -32,6 +32,7 @@ export function CourseMapPage() {
     <section className="space-y-4">
       <Card>
         <h2 className="text-xl font-semibold">{t('courseMap.title')}</h2>
+        <p className="mt-1 text-sm text-gray-600">{t('courseMap.measurementNote')}</p>
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
           <label className="text-sm font-medium">
             {t('courseMap.selectCourse')}
@@ -70,6 +71,13 @@ export function CourseMapPage() {
             <div><p className="text-gray-500">{t('courseMap.teeYellow')}</p><p className="text-base font-semibold">{hole.yardages.yellow}m</p></div>
           </div>
           {hole.yardages.red && <p className="text-sm text-gray-600">{t('courseMap.teeRed')}: {hole.yardages.red}m</p>}
+          {hole.yardages.orange && <p className="text-sm text-gray-600">{t('courseMap.teeOrange')}: {hole.yardages.orange}m</p>}
+          {hole.layoutSummary && (
+            <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-sm text-emerald-900">
+              <p className="font-semibold">{t('courseMap.layoutSummary')}</p>
+              <p>{hole.layoutSummary}</p>
+            </div>
+          )}
           <HoleMap hole={hole} />
         </Card>
       )}

@@ -103,7 +103,10 @@
     "club9Iron": "9 Iron",
     "clubPitchingWedge": "Pitching Wedge",
     "clubSandWedge": "Sand Wedge / Chip",
-    "clubPutter": "Putter / Short chip"
+    "clubPutter": "Putter / Short chip",
+    "teeOrange": "Orange Tee",
+    "layoutSummary": "Layout summary",
+    "measurementNote": "Distances measured from stone tee marker to center of green."
   },
   "empty": {
     "noRounds": "No rounds yet. Add your first score!",

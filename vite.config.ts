@@ -20,18 +20,52 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,png,svg,ico}'],
+        globPatterns: ['**/*.{js,css,html,png,svg,ico,webmanifest}'],
         runtimeCaching: [
           {
-            urlPattern: /^https:\/\/tile\.openstreetmap\.org\/.*/,
+            urlPattern: /^https:\/\/services\.arcgisonline\.com\/.*/,
             handler: 'CacheFirst',
             options: {
-              cacheName: 'osm-tiles',
+              cacheName: 'arcgis-tiles',
+              cacheableResponse: { statuses: [0, 200] },
+              expiration: { maxEntries: 1200, maxAgeSeconds: 60 * 60 * 24 * 14 },
+            },
+          },
+          {
+            urlPattern: /^https:\/\/a\.basemaps\.cartocdn\.com\/.*/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'carto-tiles',
+              cacheableResponse: { statuses: [0, 200] },
               expiration: { maxEntries: 600, maxAgeSeconds: 60 * 60 * 24 * 7 },
+            },
+          },
+          {
+            urlPattern: /\/assets\/.*\.(js|css)$/,
+            handler: 'StaleWhileRevalidate',
+            options: {
+              cacheName: 'app-static-assets',
             },
           },
         ],
       },
     }),
   ],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          react: ['react', 'react-dom'],
+          firebase: ['firebase/app', 'firebase/auth'],
+          map: ['maplibre-gl'],
+          state: ['zustand', 'dexie'],
+        },
+      },
+    },
+  },
+  server: {
+    proxy: {
+      '/api': 'http://localhost:3001',
+    },
+  },
 });

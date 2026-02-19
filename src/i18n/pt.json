@@ -103,7 +103,10 @@
     "club9Iron": "Ferro 9",
     "clubPitchingWedge": "Pitching Wedge",
     "clubSandWedge": "Sand Wedge / Chip",
-    "clubPutter": "Putter / Chip curto"
+    "clubPutter": "Putter / Chip curto",
+    "teeOrange": "Tee Laranja",
+    "layoutSummary": "Resumo do traçado",
+    "measurementNote": "Distâncias medidas do marco de pedra no tee ao centro do green."
   },
   "empty": {
     "noRounds": "Ainda não existem voltas. Adicione o seu primeiro resultado!",

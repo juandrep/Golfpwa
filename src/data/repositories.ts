@@ -1,26 +1,81 @@
 import { db, type ActiveRound } from './db';
-import type { Course, Round, UserSettings } from '../domain/types';
-import { demoCourse } from './seedCourse';
+import type { Course, Round, UserProfile, UserSettings } from '../domain/types';
+import { demoCourse, valeDaPintaCourse } from './seedCourse';
+import { apiClient, type BootstrapResponse } from './apiClient';
 
 const SETTINGS_KEY = 'user-settings' as const;
 
 const defaultSettings: UserSettings = {
   id: SETTINGS_KEY,
   distanceUnit: 'yards',
-  tileSourceId: 'osm-standard',
+  tileSourceId: 'esri-world-imagery',
   updatedAt: new Date().toISOString(),
 };
+
+const defaultProfile: UserProfile = {
+  uid: 'local-user',
+  email: '',
+  displayName: 'Guest Player',
+  role: 'member',
+  membershipStatus: 'pending',
+  handicapIndex: '',
+  homeCourse: '',
+  onboardingCompletedAt: '',
+  updatedAt: new Date().toISOString(),
+};
+
+async function applyBootstrapData(data: BootstrapResponse): Promise<void> {
+  await db.transaction(
+    'rw',
+    [db.courses, db.rounds, db.settings, db.profiles, db.activeRound],
+    async () => {
+      await db.courses.clear();
+      await db.rounds.clear();
+      await db.settings.clear();
+      await db.profiles.clear();
+      await db.activeRound.clear();
+
+      if (data.courses.length > 0) {
+        await db.courses.bulkPut(data.courses);
+      } else {
+        await db.courses.bulkPut([valeDaPintaCourse, demoCourse]);
+      }
+      if (data.rounds.length > 0) await db.rounds.bulkPut(data.rounds);
+      await db.settings.put(data.settings);
+      await db.profiles.put(data.profile);
+
+      if (data.activeRoundId) {
+        const activeRound: ActiveRound = {
+          id: 'active-round',
+          roundId: data.activeRoundId,
+          updatedAt: new Date().toISOString(),
+        };
+        await db.activeRound.put(activeRound);
+      }
+    },
+  );
+}
 
 export async function ensureSeedData(): Promise<void> {
   const hasCourses = await db.courses.count();
   if (hasCourses === 0) {
-    await db.courses.add(demoCourse);
+    await db.courses.bulkPut([valeDaPintaCourse, demoCourse]);
   }
 
   const settings = await db.settings.get(SETTINGS_KEY);
   if (!settings) {
     await db.settings.put(defaultSettings);
   }
+
+  const profile = await db.profiles.get(defaultProfile.uid);
+  if (!profile) {
+    await db.profiles.put(defaultProfile);
+  }
+}
+
+export async function syncFromRemote(uid: string, email = ''): Promise<void> {
+  const data = await apiClient.bootstrap(uid, email);
+  await applyBootstrapData(data);
 }
 
 export const courseRepository = {
@@ -54,6 +109,14 @@ export const roundRepository = {
   async save(round: Round): Promise<string> {
     await db.rounds.put(round);
     return round.id;
+  },
+
+  async remove(roundId: string): Promise<void> {
+    await db.rounds.delete(roundId);
+    const state = await db.activeRound.get('active-round');
+    if (state?.roundId === roundId) {
+      await db.activeRound.delete('active-round');
+    }
   },
 
   async setActiveRound(roundId: string): Promise<void> {
@@ -92,6 +155,21 @@ export const settingsRepository = {
       updatedAt: new Date().toISOString(),
     };
     await db.settings.put(updated);
+    return updated;
+  },
+};
+
+export const profileRepository = {
+  async get(): Promise<UserProfile> {
+    const firstProfile = await db.profiles.toCollection().first();
+    if (firstProfile) return firstProfile;
+    await db.profiles.put(defaultProfile);
+    return defaultProfile;
+  },
+
+  async save(profile: UserProfile): Promise<UserProfile> {
+    const updated = { ...profile, updatedAt: new Date().toISOString() };
+    await db.profiles.put(updated);
     return updated;
   },
 };

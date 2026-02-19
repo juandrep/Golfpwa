@@ -15,3 +15,13 @@
 - Avoid aggressive background refresh and over-zooming.
 
 See: <https://operations.osmfoundation.org/policies/tiles/>
+
+## Course data reference
+- Course: Vale da Pinta - Pestana Golf Resort (Portugal)
+- Measurement note: all distances are measured from the stone point in the tees to the center of the green.
+- Course total:
+  - White: 6127 m
+  - Yellow: 5769 m
+  - Red: 5244 m
+  - Orange: 4866 m
+  - Par: 71

@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie';
-import type { Course, Round, UserSettings } from '../domain/types';
+import type { Course, Round, UserProfile, UserSettings } from '../domain/types';
 
 export interface ActiveRound {
   id: string;
@@ -11,6 +11,7 @@ export class GreenCaddieDB extends Dexie {
   courses!: Table<Course, string>;
   rounds!: Table<Round, string>;
   settings!: Table<UserSettings, 'user-settings'>;
+  profiles!: Table<UserProfile, string>;
   activeRound!: Table<ActiveRound, string>;
 
   constructor() {
@@ -20,6 +21,14 @@ export class GreenCaddieDB extends Dexie {
       courses: 'id, name, updatedAt, isDemo',
       rounds: 'id, courseId, startedAt, completedAt',
       settings: 'id, tileSourceId, updatedAt',
+      activeRound: 'id, roundId, updatedAt',
+    });
+
+    this.version(2).stores({
+      courses: 'id, name, updatedAt, isDemo',
+      rounds: 'id, courseId, startedAt, completedAt',
+      settings: 'id, tileSourceId, updatedAt',
+      profiles: 'uid, displayName, role, updatedAt',
       activeRound: 'id, roundId, updatedAt',
     });
   }
