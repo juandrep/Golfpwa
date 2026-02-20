@@ -1,4 +1,11 @@
-import type { Course, Round, UserProfile, UserSettings } from '../domain/types';
+import type {
+  Course,
+  Round,
+  Team,
+  TeamEvent,
+  UserProfile,
+  UserSettings,
+} from '../domain/types';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
 
@@ -63,6 +70,15 @@ export interface RoundFeedbackPayload {
   note?: string;
 }
 
+export interface TeamEventLeaderboardEntry {
+  uid: string;
+  displayName: string;
+  rounds: number;
+  bestScore: number;
+  averageScore: number;
+  position: number;
+}
+
 export interface RoundFeedbackEntry {
   id: string;
   uid: string;
@@ -72,6 +88,10 @@ export interface RoundFeedbackEntry {
   rating: number;
   note: string;
   timestamp: string;
+  adminReply: string;
+  adminReplyAt: string;
+  adminReplyBy: string;
+  userReadAt: string;
 }
 
 export class ApiConflictError extends Error {
@@ -249,6 +269,118 @@ export const apiClient = {
       headers: { 'x-admin-email': adminEmail },
     });
     const data = await parseJson<{ entries: RoundFeedbackEntry[] }>(response);
+    return data.entries;
+  },
+
+  async replyRoundFeedback(adminEmail: string, feedbackId: string, reply: string): Promise<RoundFeedbackEntry> {
+    const response = await fetch(`${API_BASE}/admin/feedback/round/${encodeURIComponent(feedbackId)}/reply`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-admin-email': adminEmail,
+      },
+      body: JSON.stringify({ reply }),
+    });
+    const data = await parseJson<{ entry: RoundFeedbackEntry }>(response);
+    return data.entry;
+  },
+
+  async listMyRoundFeedback(uid: string, limit = 50): Promise<RoundFeedbackEntry[]> {
+    const query = new URLSearchParams({ limit: String(limit) }).toString();
+    const response = await fetch(`${API_BASE}/users/${encodeURIComponent(uid)}/feedback/round?${query}`);
+    const data = await parseJson<{ entries: RoundFeedbackEntry[] }>(response);
+    return data.entries;
+  },
+
+  async markRoundFeedbackRead(uid: string, feedbackId: string): Promise<RoundFeedbackEntry> {
+    const response = await fetch(
+      `${API_BASE}/users/${encodeURIComponent(uid)}/feedback/round/${encodeURIComponent(feedbackId)}/read`,
+      { method: 'PUT' },
+    );
+    const data = await parseJson<{ entry: RoundFeedbackEntry }>(response);
+    return data.entry;
+  },
+
+  async listMyTeams(uid: string): Promise<Team[]> {
+    const query = new URLSearchParams({ uid }).toString();
+    const response = await fetch(`${API_BASE}/users/${encodeURIComponent(uid)}/teams?${query}`, {
+      headers: { 'x-user-uid': uid },
+    });
+    const data = await parseJson<{ teams: Team[] }>(response);
+    return data.teams;
+  },
+
+  async createTeam(payload: {
+    uid: string;
+    email?: string;
+    displayName?: string;
+    name: string;
+  }): Promise<Team> {
+    const response = await fetch(`${API_BASE}/teams`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-user-uid': payload.uid,
+      },
+      body: JSON.stringify(payload),
+    });
+    const data = await parseJson<{ team: Team }>(response);
+    return data.team;
+  },
+
+  async joinTeam(payload: {
+    uid: string;
+    email?: string;
+    displayName?: string;
+    inviteCode: string;
+  }): Promise<Team> {
+    const response = await fetch(`${API_BASE}/teams/join`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-user-uid': payload.uid,
+      },
+      body: JSON.stringify(payload),
+    });
+    const data = await parseJson<{ team: Team }>(response);
+    return data.team;
+  },
+
+  async listTeamEvents(teamId: string, uid: string): Promise<TeamEvent[]> {
+    const query = new URLSearchParams({ uid }).toString();
+    const response = await fetch(`${API_BASE}/teams/${encodeURIComponent(teamId)}/events?${query}`, {
+      headers: { 'x-user-uid': uid },
+    });
+    const data = await parseJson<{ events: TeamEvent[] }>(response);
+    return data.events;
+  },
+
+  async createTeamEvent(payload: {
+    uid: string;
+    teamId: string;
+    name: string;
+    startsAt: string;
+    endsAt: string;
+    format: 'stroke-play' | 'stableford' | 'match-play' | 'scramble';
+  }): Promise<TeamEvent> {
+    const response = await fetch(`${API_BASE}/teams/${encodeURIComponent(payload.teamId)}/events`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-user-uid': payload.uid,
+      },
+      body: JSON.stringify(payload),
+    });
+    const data = await parseJson<{ event: TeamEvent }>(response);
+    return data.event;
+  },
+
+  async teamEventLeaderboard(eventId: string, uid: string): Promise<TeamEventLeaderboardEntry[]> {
+    const query = new URLSearchParams({ uid }).toString();
+    const response = await fetch(`${API_BASE}/team-events/${encodeURIComponent(eventId)}/leaderboard?${query}`, {
+      headers: { 'x-user-uid': uid },
+    });
+    const data = await parseJson<{ entries: TeamEventLeaderboardEntry[] }>(response);
     return data.entries;
   },
 };

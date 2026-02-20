@@ -9,6 +9,7 @@ import { Card, Toggle } from '../../ui/components';
 import { tileSources, useAppStore } from '../../app/store';
 import { buildRasterMapStyle, MAP_MAX_ZOOM } from '../../app/mapStyle';
 import { getHoleTeePoint, getTeeDisplay } from '../../domain/tee';
+import { useI18n } from '../../app/i18n';
 
 interface Props {
   hole: Hole;
@@ -19,34 +20,16 @@ type Zone = 'tee' | 'fairway' | 'green';
 
 const TRACK_MAX_POINTS = 80;
 
-function recommendClub(distanceMeters: number): string {
+function recommendClubKey(distanceMeters: number): string {
   const distanceYards = metersToYards(distanceMeters);
-  if (distanceYards > 220) return 'Driver';
-  if (distanceYards > 185) return '3 Wood';
-  if (distanceYards > 160) return '5 Iron';
-  if (distanceYards > 140) return '7 Iron';
-  if (distanceYards > 115) return '8-9 Iron';
-  if (distanceYards > 80) return 'PW';
-  if (distanceYards > 45) return 'SW';
-  return 'Putter/Chip';
-}
-
-function buildTip(zone: Zone, toGreen: number, nearestHazardText: string | null, slopeText: string | null): string {
-  if (zone === 'tee') {
-    const hazard = nearestHazardText ? ` ${nearestHazardText}.` : '';
-    const slope = slopeText ? ` ${slopeText}` : '';
-    return `Tee box: choose a target line and commit. ${Math.round(metersToYards(toGreen))}y to middle.${hazard}${slope}`;
-  }
-
-  if (zone === 'green') {
-    const slope = slopeText ? ` ${slopeText}` : '';
-    return `Green zone: switch to putting focus. Read pace first, then line.${slope}`;
-  }
-
-  const club = recommendClub(toGreen);
-  const hazard = nearestHazardText ? ` ${nearestHazardText}.` : '';
-  const slope = slopeText ? ` ${slopeText}` : '';
-  return `Approach: ${Math.round(metersToYards(toGreen))}y in, likely ${club}. Favor center-green miss.${hazard}${slope}`;
+  if (distanceYards > 220) return 'courseMap.clubDriver';
+  if (distanceYards > 185) return 'courseMap.club3Wood';
+  if (distanceYards > 160) return 'courseMap.club5Iron';
+  if (distanceYards > 140) return 'courseMap.club7Iron';
+  if (distanceYards > 115) return 'courseMap.club9Iron';
+  if (distanceYards > 80) return 'courseMap.clubPitchingWedge';
+  if (distanceYards > 45) return 'courseMap.clubSandWedge';
+  return 'courseMap.clubPutter';
 }
 
 function getHoleZones(hole: Hole) {
@@ -71,6 +54,7 @@ function getHoleBearing(from: LatLng, to: LatLng): number {
 }
 
 export function LiveHolePanel({ hole, teeOption = null }: Props) {
+  const { t } = useI18n();
   const unit = useAppStore((state) => state.unit);
   const tileSourceId = useAppStore((state) => state.tileSourceId);
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
@@ -115,6 +99,11 @@ export function LiveHolePanel({ hole, teeOption = null }: Props) {
         : inFairwayPolygon || toGreen >= 28
           ? 'fairway'
           : 'green';
+  const zoneLabel = zone === 'tee'
+    ? t('liveHole.zoneTee')
+    : zone === 'fairway'
+      ? t('liveHole.zoneFairway')
+      : t('liveHole.zoneGreen');
 
   const nearestHazard = useMemo(() => {
     if (!userPos || hole.hazards.length === 0) return null;
@@ -124,18 +113,30 @@ export function LiveHolePanel({ hole, teeOption = null }: Props) {
       .sort((a, b) => a.distance - b.distance);
 
     if (!closest || closest.distance > 180) return null;
-    return `${closest.hazard.name} at ${toDisplayDistance(closest.distance, unit)} ${unit}`;
-  }, [hole.hazards, unit, userPos]);
+    return `${closest.hazard.name} ${t('liveHole.at')} ${toDisplayDistance(closest.distance, unit)} ${unit}`;
+  }, [hole.hazards, t, unit, userPos]);
 
   const slopeText = useMemo(() => {
     if (altitude === null || prevAltitude === null) return null;
     const delta = altitude - prevAltitude;
-    if (delta > 1.5) return 'Uphill lie: take one more club.';
-    if (delta < -1.5) return 'Downhill lie: take one less club.';
+    if (delta > 1.5) return t('liveHole.uphillLie');
+    if (delta < -1.5) return t('liveHole.downhillLie');
     return null;
-  }, [altitude, prevAltitude]);
+  }, [altitude, prevAltitude, t]);
 
-  const tip = toGreen === null ? 'Enable GPS to get live play tips.' : buildTip(zone, toGreen, nearestHazard, slopeText);
+  const recommendedClub = toGreen === null ? null : t(recommendClubKey(toGreen));
+  const tip = useMemo(() => {
+    if (toGreen === null) return t('liveHole.enableGpsTips');
+    const hazard = nearestHazard ? ` ${nearestHazard}.` : '';
+    const slope = slopeText ? ` ${slopeText}` : '';
+    if (zone === 'tee') {
+      return `${t('liveHole.tipTeePrefix')} ${Math.round(metersToYards(toGreen))}y ${t('liveHole.tipToMiddle')}.${hazard}${slope}`;
+    }
+    if (zone === 'green') {
+      return `${t('liveHole.tipGreen')}.${slope}`;
+    }
+    return `${t('liveHole.tipApproachPrefix')} ${Math.round(metersToYards(toGreen))}y ${t('liveHole.tipLikely')} ${recommendedClub}. ${t('liveHole.tipCenterMiss')}.${hazard}${slope}`;
+  }, [nearestHazard, recommendedClub, slopeText, t, toGreen, zone]);
   const frontDistance = userPos ? haversineMeters(userPos, hole.green.front) : null;
   const middleDistance = userPos ? haversineMeters(userPos, hole.green.middle) : null;
   const backDistance = userPos ? haversineMeters(userPos, hole.green.back) : null;
@@ -264,7 +265,7 @@ export function LiveHolePanel({ hole, teeOption = null }: Props) {
         setGpsError('');
       },
       () => {
-        setGpsError('GPS unavailable. You can still edit score manually.');
+        setGpsError(t('liveHole.gpsUnavailableManual'));
       },
       { enableHighAccuracy: true },
     );
@@ -748,34 +749,34 @@ export function LiveHolePanel({ hole, teeOption = null }: Props) {
         />
         <div className={`live-hole-loading-overlay ${holeTransitioning ? 'is-visible' : ''}`} aria-hidden={!holeTransitioning}>
           <div className="live-hole-loading-panel">
-            <p className="live-hole-loading-eyebrow">Preparing map</p>
-            <p className="live-hole-loading-title">Hole {hole.number}</p>
-            <p className="live-hole-loading-subtitle">Par {hole.par}</p>
+            <p className="live-hole-loading-eyebrow">{t('liveHole.preparingMap')}</p>
+            <p className="live-hole-loading-title">{t('score.hole')} {hole.number}</p>
+            <p className="live-hole-loading-subtitle">{t('courseMap.par')} {hole.par}</p>
             <div className="live-hole-loading-track" />
           </div>
         </div>
 
         <div className="absolute inset-x-0 top-0 hidden items-center justify-between bg-gradient-to-b from-black/65 to-transparent px-3 py-2 sm:flex">
-          <div className="rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-stone-800">
-            Pin Sheet
+          <div className="rounded-full bg-white/92 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-700">
+            {t('liveHole.pinSheet')}
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="rounded-full bg-white/88 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-stone-800">
+            <div className="rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-700">
               {teeDisplay.label} Tee
             </div>
-            <div className="rounded-full bg-emerald-600/95 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-white">
-              {zone}
+            <div className="rounded-full bg-gradient-to-r from-cyan-500 to-sky-500 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-white">
+              {zoneLabel}
             </div>
           </div>
         </div>
 
         <div className="absolute left-2 top-12 z-10 hidden space-y-2 sm:block">
-          <div className="flex items-center gap-2 rounded-lg bg-black/45 px-2 py-1.5 text-white backdrop-blur">
-            <span className="text-[10px] uppercase tracking-wide text-stone-200">North</span>
+          <div className="flex items-center gap-2 rounded-lg border border-white/20 bg-slate-900/45 px-2 py-1.5 text-white backdrop-blur">
+            <span className="text-[10px] uppercase tracking-wide text-slate-200">{t('liveHole.north')}</span>
             <Toggle checked={lockNorth} onChange={setLockNorth} />
           </div>
-          <div className="flex items-center gap-2 rounded-lg bg-black/45 px-2 py-1.5 text-white backdrop-blur">
-            <span className="text-[10px] uppercase tracking-wide text-stone-200">Follow</span>
+          <div className="flex items-center gap-2 rounded-lg border border-white/20 bg-slate-900/45 px-2 py-1.5 text-white backdrop-blur">
+            <span className="text-[10px] uppercase tracking-wide text-slate-200">{t('liveHole.follow')}</span>
             <Toggle checked={followMe} onChange={setFollowMe} />
           </div>
         </div>
@@ -786,21 +787,21 @@ export function LiveHolePanel({ hole, teeOption = null }: Props) {
             className="rounded-lg bg-black/45 px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-white backdrop-blur"
             onClick={recenterNow}
           >
-            Recenter
+            {t('liveHole.recenter')}
           </button>
           <button
             type="button"
             className="rounded-lg bg-black/45 px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-white backdrop-blur"
             onClick={focusGreenNow}
           >
-            Green Cam
+            {t('liveHole.greenCam')}
           </button>
           <button
             type="button"
             className={`rounded-lg px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-white backdrop-blur ${layupMode ? 'bg-amber-600/90' : 'bg-black/45'}`}
             onClick={() => setLayupMode((current) => !current)}
           >
-            {layupMode ? 'Tap Map' : 'Mark Layup'}
+            {layupMode ? t('liveHole.tapMap') : t('liveHole.markLayup')}
           </button>
           {layupPoint ? (
             <button
@@ -808,47 +809,47 @@ export function LiveHolePanel({ hole, teeOption = null }: Props) {
               className="rounded-lg bg-black/45 px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-white backdrop-blur"
               onClick={() => setLayupPoint(null)}
             >
-              Clear Layup
-            </button>
-          ) : null}
+                {t('liveHole.clearLayup')}
+              </button>
+            ) : null}
         </div>
 
         <div className="absolute inset-x-0 top-2 z-10 px-2 sm:hidden">
           <div className="flex items-center gap-1 overflow-x-auto rounded-xl bg-black/55 p-1.5 text-white backdrop-blur [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <button
               type="button"
-              className={`shrink-0 rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-wide ${lockNorth ? 'bg-emerald-600/90' : 'bg-white/15'}`}
+              className={`shrink-0 rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-wide ${lockNorth ? 'bg-gradient-to-r from-cyan-500 to-sky-500' : 'bg-white/15'}`}
               onClick={() => setLockNorth((current) => !current)}
             >
-              North
+              {t('liveHole.north')}
             </button>
             <button
               type="button"
-              className={`shrink-0 rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-wide ${followMe ? 'bg-emerald-600/90' : 'bg-white/15'}`}
+              className={`shrink-0 rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-wide ${followMe ? 'bg-gradient-to-r from-cyan-500 to-sky-500' : 'bg-white/15'}`}
               onClick={() => setFollowMe((current) => !current)}
             >
-              Follow
+              {t('liveHole.follow')}
             </button>
             <button
               type="button"
               className="shrink-0 rounded-md bg-white/15 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide"
               onClick={recenterNow}
             >
-              Recenter
+              {t('liveHole.recenter')}
             </button>
             <button
               type="button"
               className="shrink-0 rounded-md bg-white/15 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide"
               onClick={focusGreenNow}
             >
-              Green Cam
+              {t('liveHole.greenCam')}
             </button>
             <button
               type="button"
               className={`shrink-0 rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-wide ${layupMode ? 'bg-amber-600/90' : 'bg-white/15'}`}
               onClick={() => setLayupMode((current) => !current)}
             >
-              {layupMode ? 'Tap Map' : 'Mark Layup'}
+              {layupMode ? t('liveHole.tapMap') : t('liveHole.markLayup')}
             </button>
             {layupPoint ? (
               <button
@@ -856,7 +857,7 @@ export function LiveHolePanel({ hole, teeOption = null }: Props) {
                 className="shrink-0 rounded-md bg-white/15 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide"
                 onClick={() => setLayupPoint(null)}
               >
-                Clear Layup
+                {t('liveHole.clearLayup')}
               </button>
             ) : null}
           </div>
@@ -865,20 +866,20 @@ export function LiveHolePanel({ hole, teeOption = null }: Props) {
         <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/35 to-transparent p-3">
           <div className="grid grid-cols-2 gap-2 text-center text-white sm:grid-cols-4">
             <div className="rounded-lg border border-blue-200/40 bg-blue-500/35 px-2 py-1.5 backdrop-blur-sm">
-              <p className="text-[10px] uppercase tracking-[0.14em] text-blue-100">Front</p>
+              <p className="text-[10px] uppercase tracking-[0.14em] text-blue-100">{t('map.front')}</p>
               <p className="text-xs font-semibold sm:text-sm">{frontDistance === null ? '--' : `${toDisplayDistance(frontDistance, unit)} ${unit === 'yards' ? 'y' : 'm'}`}</p>
             </div>
             <div className="rounded-lg border border-amber-200/40 bg-amber-500/35 px-2 py-1.5 backdrop-blur-sm">
-              <p className="text-[10px] uppercase tracking-[0.14em] text-amber-100">Middle</p>
+              <p className="text-[10px] uppercase tracking-[0.14em] text-amber-100">{t('map.middle')}</p>
               <p className="text-xs font-semibold sm:text-sm">{middleDistance === null ? '--' : `${toDisplayDistance(middleDistance, unit)} ${unit === 'yards' ? 'y' : 'm'}`}</p>
             </div>
             <div className="rounded-lg border border-red-200/40 bg-red-500/35 px-2 py-1.5 backdrop-blur-sm">
-              <p className="text-[10px] uppercase tracking-[0.14em] text-red-100">Back</p>
+              <p className="text-[10px] uppercase tracking-[0.14em] text-red-100">{t('map.back')}</p>
               <p className="text-xs font-semibold sm:text-sm">{backDistance === null ? '--' : `${toDisplayDistance(backDistance, unit)} ${unit === 'yards' ? 'y' : 'm'}`}</p>
             </div>
             <div className="rounded-lg border border-emerald-200/40 bg-emerald-600/85 px-2 py-1.5">
-              <p className="text-[10px] uppercase tracking-[0.14em] text-emerald-100">Club</p>
-              <p className="text-xs font-semibold sm:text-sm">{toGreen === null ? '--' : recommendClub(toGreen)}</p>
+              <p className="text-[10px] uppercase tracking-[0.14em] text-emerald-100">{t('liveHole.club')}</p>
+              <p className="text-xs font-semibold sm:text-sm">{toGreen === null ? '--' : recommendedClub}</p>
             </div>
           </div>
         </div>
@@ -887,14 +888,14 @@ export function LiveHolePanel({ hole, teeOption = null }: Props) {
       <Card className="sm:hidden border-stone-200 bg-stone-50">
         <div className="flex items-center justify-between gap-2">
           <p className="rounded-full bg-white px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-700">
-            Pin Sheet
+            {t('liveHole.pinSheet')}
           </p>
           <div className="flex items-center gap-1.5">
             <p className="rounded-full bg-white px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-stone-700">
               {teeDisplay.label} Tee
             </p>
             <p className="rounded-full bg-emerald-600 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-white">
-              {zone}
+              {zoneLabel}
             </p>
           </div>
         </div>
@@ -904,7 +905,7 @@ export function LiveHolePanel({ hole, teeOption = null }: Props) {
 
       <Card className="space-y-2 border-stone-200 bg-stone-50">
         <div className="flex items-start justify-between gap-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-stone-700">Caddie Tip</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-stone-700">{t('liveHole.caddieTip')}</p>
           <p className="rounded-full bg-white px-2 py-1 text-xs font-semibold text-stone-700">
             {toGreen === null ? '--' : `${Math.round(metersToYards(toGreen))}y`}
           </p>
@@ -912,19 +913,19 @@ export function LiveHolePanel({ hole, teeOption = null }: Props) {
         <p className="text-sm text-stone-800">{tip}</p>
         <div className="grid grid-cols-2 gap-2 text-sm">
           <div className="rounded-lg border border-stone-200 bg-white px-2 py-2">
-            <p className="text-xs text-stone-500">To Tee</p>
+            <p className="text-xs text-stone-500">{t('liveHole.toTee')}</p>
             <p className="font-semibold text-stone-900">{toTee === null ? '--' : `${toDisplayDistance(toTee, unit)} ${unit}`}</p>
           </div>
           <div className="rounded-lg border border-stone-200 bg-white px-2 py-2">
-            <p className="text-xs text-stone-500">Nearest Hazard</p>
-            <p className="font-semibold text-stone-900">{nearestHazard ?? 'Clear'}</p>
+            <p className="text-xs text-stone-500">{t('liveHole.nearestHazard')}</p>
+            <p className="font-semibold text-stone-900">{nearestHazard ?? t('liveHole.clear')}</p>
           </div>
           <div className="rounded-lg border border-stone-200 bg-white px-2 py-2">
-            <p className="text-xs text-stone-500">To Layup</p>
+            <p className="text-xs text-stone-500">{t('liveHole.toLayup')}</p>
             <p className="font-semibold text-stone-900">{toLayup === null ? '--' : `${toDisplayDistance(toLayup, unit)} ${unit}`}</p>
           </div>
           <div className="rounded-lg border border-stone-200 bg-white px-2 py-2">
-            <p className="text-xs text-stone-500">Layup to Green</p>
+            <p className="text-xs text-stone-500">{t('liveHole.layupToGreen')}</p>
             <p className="font-semibold text-stone-900">{layupToGreen === null ? '--' : `${toDisplayDistance(layupToGreen, unit)} ${unit}`}</p>
           </div>
         </div>

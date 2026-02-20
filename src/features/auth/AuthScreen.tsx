@@ -1,18 +1,12 @@
 import { useEffect, useState } from 'react';
+import { motion } from 'framer-motion';
 import { useAuth } from '../../app/auth';
 import { Button, Card } from '../../ui/components';
 import { trackAppEvent } from '../../app/analytics';
-
-const authSlides = [
-  'https://dynamic-media-cdn.tripadvisor.com/media/photo-o/2b/76/e7/ac/pestana-alto-golf-resorts.jpg?w=1200&h=-1&s=1',
-  'https://ygt-res.cloudinary.com/image/upload/c_fit,h_1280,q_80,w_1920/v1683800021/Venues/Gramacho/Gramacho-Beyond-DJI_0699-Edit_d17qw8.jpg',
-  'https://www.portugalgolf.net/xms/img/1200x1200/2f885/Zmx0cltdPXVzbSZxPTkw/L08zbS0tME0zWnJTbS95enNQLlh4c05oVUJoUHdhL2VqN1NGc05TbTdaSlpzYU1KN25ac3BBczR5NnovUjdza1NtN1pKWnNtTUo3blpzUmo3U0ZzWlNuTVpGc0RNU1l0enRka3I.jpg',
-  'https://images.myguide-cdn.com/algarve/companies/gramacho-pestana-golf/large/gramacho-pestana-golf-606346.jpeg',
-  'https://www.golfholidays.com/images/1200-15327/view-pestana-alto-golf--country-clubs-picturesque-golf-course-in-marvelous-algarve.jpg',
-  'https://golfhaftet-img.b-cdn.net/golfclubs/1739-4050ab.png',
-];
+import { useI18n } from '../../app/i18n';
 
 export function AuthScreen() {
+  const { t } = useI18n();
   const { signInWithGoogle } = useAuth();
   const [error, setError] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
@@ -37,63 +31,66 @@ export function AuthScreen() {
         eventName: 'auth_google_signin_failed',
         stage: 'auth',
       });
-      setError('Google sign-in failed. Please try again.');
+      setError(t('auth.signInFailed'));
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <main className="relative flex min-h-screen w-full items-center justify-center overflow-hidden bg-gradient-to-br from-emerald-950 to-slate-950 px-4 py-8">
-      <div className="absolute inset-0">
-        {authSlides.map((imageUrl, index) => (
-          <div
-            key={imageUrl}
-            className="auth-slide"
-            style={{
-              backgroundImage: `url('${imageUrl}')`,
-              animationDelay: `${index * 3.4}s`,
-              animationDuration: `${authSlides.length * 3.4}s`,
-            }}
-          />
-        ))}
-        <div className="auth-image-soften" />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/65 via-black/55 to-black/75" />
-      </div>
+    <main className="relative flex min-h-screen w-full items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_15%_10%,rgba(14,165,233,0.18),transparent_34%),radial-gradient(circle_at_80%_90%,rgba(34,211,238,0.16),transparent_36%),linear-gradient(180deg,#f8fbff_0%,#eef5ff_100%)] px-4 py-8">
+      <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(120deg,rgba(255,255,255,0.15),rgba(255,255,255,0))]" />
+      <motion.div
+        aria-hidden="true"
+        className="pointer-events-none absolute -left-20 -top-16 h-52 w-52 rounded-full bg-cyan-300/30 blur-3xl"
+        animate={{ x: [0, 20, -8, 0], y: [0, 18, 10, 0] }}
+        transition={{ duration: 11, repeat: Infinity, ease: 'easeInOut' }}
+      />
+      <motion.div
+        aria-hidden="true"
+        className="pointer-events-none absolute -bottom-24 -right-16 h-60 w-60 rounded-full bg-sky-300/30 blur-3xl"
+        animate={{ x: [0, -14, 12, 0], y: [0, -20, -8, 0] }}
+        transition={{ duration: 12, repeat: Infinity, ease: 'easeInOut' }}
+      />
 
-      <Card className="auth-login-card relative z-10 w-full max-w-md overflow-hidden border border-emerald-100 bg-white/95 p-0 text-gray-900 backdrop-blur-xl">
-        <div className="relative space-y-4 px-6 pt-8">
+      <Card className="auth-login-card relative z-10 w-full max-w-md overflow-hidden border border-white/70 bg-white/90 p-0 text-slate-900 backdrop-blur-xl">
+        <motion.div
+          initial="hidden"
+          animate="show"
+          variants={{ hidden: {}, show: { transition: { staggerChildren: 0.08 } } }}
+          className="relative space-y-4 px-6 pt-8"
+        >
           <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-emerald-700">GreenCaddie</p>
-            <h1 className="text-3xl font-bold leading-tight tracking-tight text-gray-900 sm:text-4xl">
-              Welcome back
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-cyan-700">GreenCaddie</p>
+            <h1 className="text-3xl font-bold leading-tight tracking-tight text-slate-900 sm:text-4xl">
+              {t('auth.welcomeBack')}
               <br />
-              <span className="text-emerald-300">to your round</span>
+              <span className="text-cyan-500">{t('auth.toYourRound')}</span>
             </h1>
           </div>
 
-          <p className="text-sm leading-relaxed text-gray-700">
-            Sign in to access GPS distances, club guidance, and your synced score history.
+          <p className="text-sm leading-relaxed text-slate-700">
+            {t('auth.description')}
           </p>
 
           <div className="flex flex-wrap gap-2">
-            <span className="inline-flex items-center rounded-full border border-emerald-300/50 bg-emerald-500/20 px-3 py-1 text-xs font-medium text-emerald-100">
+            <motion.span whileHover={{ y: -2 }} className="inline-flex items-center rounded-full border border-cyan-300/60 bg-cyan-50 px-3 py-1 text-xs font-medium text-cyan-800">
               Vale da Pinta
-            </span>
-            <span className="inline-flex items-center rounded-full border border-sky-300/50 bg-sky-500/20 px-3 py-1 text-xs font-medium text-sky-100">
+            </motion.span>
+            <motion.span whileHover={{ y: -2 }} className="inline-flex items-center rounded-full border border-sky-300/60 bg-sky-50 px-3 py-1 text-xs font-medium text-sky-800">
               Gramacho
-            </span>
+            </motion.span>
           </div>
-        </div>
+        </motion.div>
 
-        <div className="relative mt-8 space-y-4 border-t border-emerald-100 bg-emerald-50/60 px-6 py-6">
+        <div className="relative mt-8 space-y-4 border-t border-slate-100 bg-slate-50/70 px-6 py-6">
           {error ? <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
 
           <Button
             onClick={handleGoogleSignIn}
             disabled={isSubmitting}
             variant="secondary"
-            className="w-full border-white/80 bg-white px-6 py-3 text-sm font-semibold text-gray-900 hover:bg-gray-100 disabled:cursor-not-allowed"
+            className="w-full border-white/80 bg-white px-6 py-3 text-sm font-semibold text-slate-900 hover:bg-gray-100 disabled:cursor-not-allowed"
           >
             <span className="flex items-center justify-center gap-2">
               {isSubmitting ? (
@@ -114,7 +111,7 @@ export function AuthScreen() {
                       d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                     />
                   </svg>
-                  <span>Please wait...</span>
+                  <span>{t('auth.pleaseWait')}</span>
                 </>
               ) : (
                 <>
@@ -136,13 +133,13 @@ export function AuthScreen() {
                       d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
                     />
                   </svg>
-                  <span>Sign in with Google</span>
+                  <span>{t('auth.signInWithGoogle')}</span>
                 </>
               )}
             </span>
           </Button>
 
-          <p className="text-center text-xs text-gray-500">Secure sign-in with Firebase Google provider</p>
+          <p className="text-center text-xs text-slate-500">{t('auth.secureSignIn')}</p>
         </div>
       </Card>
     </main>

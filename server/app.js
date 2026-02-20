@@ -31,6 +31,23 @@ const sanitizeUser = (doc, uid, email = '') => ({
   activeRoundId: doc?.activeRoundId ?? null,
 });
 
+function mapRoundFeedbackEntry(entry) {
+  return {
+    id: entry.id ?? '',
+    uid: entry.uid ?? '',
+    email: entry.email ?? '',
+    roundId: entry.roundId ?? '',
+    courseId: entry.courseId ?? '',
+    rating: Number(entry.rating ?? 0),
+    note: entry.note ?? '',
+    timestamp: entry.timestamp ?? '',
+    adminReply: entry.adminReply ?? '',
+    adminReplyAt: entry.adminReplyAt ?? '',
+    adminReplyBy: entry.adminReplyBy ?? '',
+    userReadAt: entry.userReadAt ?? '',
+  };
+}
+
 let appPromise;
 
 async function createApp() {
@@ -58,12 +75,20 @@ async function createApp() {
   const courseAuditLogs = db.collection('course_audit_logs');
   const productEvents = db.collection('product_events');
   const roundFeedback = db.collection('round_feedback');
+  const teams = db.collection('teams');
+  const teamEvents = db.collection('team_events');
 
   await users.createIndex({ uid: 1 }, { unique: true });
   await courseAuditLogs.createIndex({ courseId: 1, timestamp: -1 });
   await productEvents.createIndex({ eventName: 1, timestamp: -1 });
   await roundFeedback.createIndex({ timestamp: -1 });
   await roundFeedback.createIndex({ courseId: 1, timestamp: -1 });
+  await roundFeedback.createIndex({ uid: 1, timestamp: -1 });
+  await teams.createIndex({ id: 1 }, { unique: true });
+  await teams.createIndex({ inviteCode: 1 }, { unique: true });
+  await teams.createIndex({ 'members.uid': 1 });
+  await teamEvents.createIndex({ id: 1 }, { unique: true });
+  await teamEvents.createIndex({ teamId: 1, startsAt: -1 });
 
   const adminEmailAllowlist = new Set(
     String(ADMIN_EMAILS || VITE_ADMIN_EMAILS)
@@ -92,6 +117,49 @@ async function createApp() {
     return userDoc;
   }
 
+  function mapTeam(team) {
+    return {
+      id: team.id ?? '',
+      name: team.name ?? '',
+      inviteCode: team.inviteCode ?? '',
+      ownerUid: team.ownerUid ?? '',
+      isPrivate: team.isPrivate !== false,
+      members: Array.isArray(team.members)
+        ? team.members.map((member) => ({
+            uid: member.uid ?? '',
+            email: member.email ?? '',
+            displayName: member.displayName ?? member.email ?? member.uid ?? 'Player',
+            joinedAt: member.joinedAt ?? '',
+          }))
+        : [],
+      createdAt: team.createdAt ?? '',
+      updatedAt: team.updatedAt ?? '',
+    };
+  }
+
+  function mapTeamEvent(event) {
+    return {
+      id: event.id ?? '',
+      teamId: event.teamId ?? '',
+      name: event.name ?? '',
+      format: event.format ?? 'stroke-play',
+      startsAt: event.startsAt ?? '',
+      endsAt: event.endsAt ?? '',
+      createdByUid: event.createdByUid ?? '',
+      createdAt: event.createdAt ?? '',
+      updatedAt: event.updatedAt ?? '',
+    };
+  }
+
+  async function generateInviteCode() {
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const code = Math.random().toString(36).slice(2, 8).toUpperCase();
+      const exists = await teams.findOne({ inviteCode: code });
+      if (!exists) return code;
+    }
+    return crypto.randomUUID().slice(0, 6).toUpperCase();
+  }
+
   function getAdminEmail(req) {
     const headerEmail = req.headers['x-admin-email'];
     if (typeof headerEmail === 'string') return headerEmail.trim().toLowerCase();
@@ -112,6 +180,30 @@ async function createApp() {
       return null;
     }
     return adminEmail;
+  }
+
+  function getRequestUserUid(req) {
+    const headerUid = req.headers['x-user-uid'];
+    if (typeof headerUid === 'string' && headerUid.trim()) return headerUid.trim();
+    if (Array.isArray(headerUid) && headerUid.length > 0 && String(headerUid[0]).trim()) {
+      return String(headerUid[0]).trim();
+    }
+    const queryUid = String(req.query.uid ?? '').trim();
+    if (queryUid) return queryUid;
+    return '';
+  }
+
+  function ensureUserAuth(req, res, uid) {
+    const requestUid = getRequestUserUid(req);
+    if (!requestUid) {
+      res.status(403).json({ error: 'Missing user identity.' });
+      return null;
+    }
+    if (requestUid !== uid) {
+      res.status(403).json({ error: 'User identity mismatch.' });
+      return null;
+    }
+    return requestUid;
   }
 
   app.get('/api/health', (_req, res) => {
@@ -352,6 +444,275 @@ async function createApp() {
     }
   });
 
+  app.get('/api/users/:uid/teams', async (req, res) => {
+    try {
+      const { uid } = req.params;
+      const requestUid = ensureUserAuth(req, res, uid);
+      if (!requestUid) return;
+      const docs = await teams.find({ 'members.uid': uid }).sort({ updatedAt: -1 }).toArray();
+      res.json({ teams: docs.map(mapTeam) });
+    } catch (_error) {
+      res.status(500).json({ error: 'Failed to load teams.' });
+    }
+  });
+
+  app.post('/api/teams', async (req, res) => {
+    try {
+      const uid = String(req.body?.uid ?? '').trim();
+      const name = String(req.body?.name ?? '').trim().slice(0, 120);
+      if (!uid || !name) {
+        res.status(400).json({ error: 'uid and name are required.' });
+        return;
+      }
+      const requestUid = ensureUserAuth(req, res, uid);
+      if (!requestUid) return;
+      await getOrCreateUser(uid, String(req.body?.email ?? ''));
+
+      const createdAt = new Date().toISOString();
+      const team = {
+        id: crypto.randomUUID(),
+        name,
+        inviteCode: await generateInviteCode(),
+        ownerUid: uid,
+        isPrivate: true,
+        members: [
+          {
+            uid,
+            email: String(req.body?.email ?? ''),
+            displayName: String(req.body?.displayName ?? '') || String(req.body?.email ?? '') || uid,
+            joinedAt: createdAt,
+          },
+        ],
+        createdAt,
+        updatedAt: createdAt,
+      };
+      await teams.insertOne(team);
+      res.json({ team: mapTeam(team) });
+    } catch (_error) {
+      res.status(500).json({ error: 'Failed to create team.' });
+    }
+  });
+
+  app.post('/api/teams/join', async (req, res) => {
+    try {
+      const uid = String(req.body?.uid ?? '').trim();
+      const inviteCode = String(req.body?.inviteCode ?? '').trim().toUpperCase();
+      if (!uid || !inviteCode) {
+        res.status(400).json({ error: 'uid and inviteCode are required.' });
+        return;
+      }
+      const requestUid = ensureUserAuth(req, res, uid);
+      if (!requestUid) return;
+      await getOrCreateUser(uid, String(req.body?.email ?? ''));
+
+      const existing = await teams.findOne({ inviteCode });
+      if (!existing) {
+        res.status(404).json({ error: 'Team invite not found.' });
+        return;
+      }
+
+      const alreadyMember = Array.isArray(existing.members) && existing.members.some((member) => member.uid === uid);
+      if (!alreadyMember) {
+        await teams.updateOne(
+          { id: existing.id },
+          {
+            $set: { updatedAt: new Date().toISOString() },
+            $push: {
+              members: {
+                uid,
+                email: String(req.body?.email ?? ''),
+                displayName: String(req.body?.displayName ?? '') || String(req.body?.email ?? '') || uid,
+                joinedAt: new Date().toISOString(),
+              },
+            },
+          },
+        );
+      }
+
+      const updated = await teams.findOne({ id: existing.id });
+      res.json({ team: mapTeam(updated ?? existing) });
+    } catch (_error) {
+      res.status(500).json({ error: 'Failed to join team.' });
+    }
+  });
+
+  app.get('/api/teams/:teamId/events', async (req, res) => {
+    try {
+      const { teamId } = req.params;
+      const uid = getRequestUserUid(req);
+      if (!uid) {
+        res.status(403).json({ error: 'Missing user identity.' });
+        return;
+      }
+      const membership = await teams.findOne({ id: teamId, 'members.uid': uid });
+      if (!membership) {
+        res.status(403).json({ error: 'Team access denied.' });
+        return;
+      }
+      const docs = await teamEvents.find({ teamId }).sort({ startsAt: -1 }).toArray();
+      res.json({ events: docs.map(mapTeamEvent) });
+    } catch (_error) {
+      res.status(500).json({ error: 'Failed to load team events.' });
+    }
+  });
+
+  app.post('/api/teams/:teamId/events', async (req, res) => {
+    try {
+      const { teamId } = req.params;
+      const uid = String(req.body?.uid ?? '').trim();
+      const name = String(req.body?.name ?? '').trim().slice(0, 120);
+      const format = String(req.body?.format ?? 'stroke-play').trim();
+      const startsAt = String(req.body?.startsAt ?? '').trim();
+      const endsAt = String(req.body?.endsAt ?? '').trim();
+      if (!uid || !name || !startsAt || !endsAt) {
+        res.status(400).json({ error: 'uid, name, startsAt, and endsAt are required.' });
+        return;
+      }
+      if (!['stroke-play', 'stableford', 'match-play', 'scramble'].includes(format)) {
+        res.status(400).json({ error: 'Invalid event format.' });
+        return;
+      }
+      const requestUid = ensureUserAuth(req, res, uid);
+      if (!requestUid) return;
+
+      const team = await teams.findOne({ id: teamId, 'members.uid': uid });
+      if (!team) {
+        res.status(403).json({ error: 'Only team members can create events.' });
+        return;
+      }
+
+      const now = new Date().toISOString();
+      const event = {
+        id: crypto.randomUUID(),
+        teamId,
+        name,
+        format,
+        startsAt,
+        endsAt,
+        createdByUid: uid,
+        createdAt: now,
+        updatedAt: now,
+      };
+      await teamEvents.insertOne(event);
+      res.json({ event: mapTeamEvent(event) });
+    } catch (_error) {
+      res.status(500).json({ error: 'Failed to create team event.' });
+    }
+  });
+
+  app.get('/api/team-events/:eventId/leaderboard', async (req, res) => {
+    try {
+      const { eventId } = req.params;
+      const uid = getRequestUserUid(req);
+      if (!uid) {
+        res.status(403).json({ error: 'Missing user identity.' });
+        return;
+      }
+      const event = await teamEvents.findOne({ id: eventId });
+      if (!event) {
+        res.status(404).json({ error: 'Team event not found.' });
+        return;
+      }
+
+      const team = await teams.findOne({ id: event.teamId });
+      if (!team || !Array.isArray(team.members) || team.members.length === 0) {
+        res.json({ entries: [] });
+        return;
+      }
+      if (!team.members.some((member) => member.uid === uid)) {
+        res.status(403).json({ error: 'Team event access denied.' });
+        return;
+      }
+
+      const memberUids = team.members.map((member) => member.uid).filter(Boolean);
+      const docs = await users.find({ uid: { $in: memberUids } }).toArray();
+
+      const entries = docs
+        .map((doc) => {
+          const rounds = (Array.isArray(doc.rounds) ? doc.rounds : []).filter((round) => round.teamEventId === eventId);
+
+          if (rounds.length === 0) return null;
+          const totals = rounds.map((round) =>
+            (Array.isArray(round.scores) ? round.scores : []).reduce(
+              (sum, score) => sum + Number(score.strokes ?? 0),
+              0,
+            ),
+          );
+          const eventFormat = String(event.format ?? 'stroke-play');
+          const allUserCourses = Array.isArray(doc.courses) ? doc.courses : [];
+          const scoreToParList = rounds.map((round) => {
+            const course = allUserCourses.find((entry) => entry.id === round.courseId);
+            const parsByHole = new Map(
+              (Array.isArray(course?.holes) ? course.holes : []).map((hole) => [Number(hole.number), Number(hole.par ?? 0)]),
+            );
+            const totalPar = (Array.isArray(round.scores) ? round.scores : []).reduce((sum, score) => {
+              return sum + Number(parsByHole.get(Number(score.holeNumber)) ?? 0);
+            }, 0);
+            const totalStrokes = (Array.isArray(round.scores) ? round.scores : []).reduce(
+              (sum, score) => sum + Number(score.strokes ?? 0),
+              0,
+            );
+            return totalStrokes - totalPar;
+          });
+
+          const stablefordPointsTotals = rounds.map((round) => {
+            const course = allUserCourses.find((entry) => entry.id === round.courseId);
+            const parsByHole = new Map(
+              (Array.isArray(course?.holes) ? course.holes : []).map((hole) => [Number(hole.number), Number(hole.par ?? 4)]),
+            );
+            return (Array.isArray(round.scores) ? round.scores : []).reduce((sum, score) => {
+              const par = Number(parsByHole.get(Number(score.holeNumber)) ?? 4);
+              const strokes = Number(score.strokes ?? par);
+              const delta = strokes - par;
+              if (delta <= -3) return sum + 5;
+              if (delta === -2) return sum + 4;
+              if (delta === -1) return sum + 3;
+              if (delta === 0) return sum + 2;
+              if (delta === 1) return sum + 1;
+              return sum;
+            }, 0);
+          });
+
+          let bestScore = 0;
+          let averageScore = 0;
+          if (eventFormat === 'stableford') {
+            bestScore = Math.max(...stablefordPointsTotals);
+            averageScore = stablefordPointsTotals.reduce((sum, total) => sum + total, 0) / stablefordPointsTotals.length;
+          } else if (eventFormat === 'match-play') {
+            bestScore = Math.min(...scoreToParList);
+            averageScore = scoreToParList.reduce((sum, total) => sum + total, 0) / scoreToParList.length;
+          } else {
+            bestScore = Math.min(...totals);
+            averageScore = totals.reduce((sum, total) => sum + total, 0) / totals.length;
+          }
+          return {
+            uid: doc.uid,
+            displayName:
+              doc.profile?.displayName
+              || team.members.find((member) => member.uid === doc.uid)?.displayName
+              || doc.email
+              || 'Player',
+            rounds: rounds.length,
+            bestScore,
+            averageScore,
+            sortMetric: bestScore,
+          };
+        })
+        .filter(Boolean)
+        .sort((a, b) => {
+          const eventFormat = String(event.format ?? 'stroke-play');
+          if (eventFormat === 'stableford') return b.sortMetric - a.sortMetric;
+          return a.sortMetric - b.sortMetric;
+        })
+        .map((entry, index) => ({ ...entry, position: index + 1 }))
+        .map(({ sortMetric, ...entry }) => entry);
+
+      res.json({ entries, event: mapTeamEvent(event), team: mapTeam(team) });
+    } catch (_error) {
+      res.status(500).json({ error: 'Failed to load team event leaderboard.' });
+    }
+  });
+
   app.get('/api/admin/members', async (req, res) => {
     try {
       const adminEmail = ensureAdmin(req, res);
@@ -508,20 +869,91 @@ async function createApp() {
         .toArray();
 
       res.json({
-        entries: entries.map((entry) => ({
-          id: entry.id ?? '',
-          uid: entry.uid ?? '',
-          email: entry.email ?? '',
-          roundId: entry.roundId ?? '',
-          courseId: entry.courseId ?? '',
-          rating: Number(entry.rating ?? 0),
-          note: entry.note ?? '',
-          timestamp: entry.timestamp ?? '',
-        })),
+        entries: entries.map(mapRoundFeedbackEntry),
         requestedBy: adminEmail,
       });
     } catch (_error) {
       res.status(500).json({ error: 'Failed to load round feedback.' });
+    }
+  });
+
+  app.put('/api/admin/feedback/round/:feedbackId/reply', async (req, res) => {
+    try {
+      const adminEmail = ensureAdmin(req, res);
+      if (!adminEmail) return;
+
+      const { feedbackId } = req.params;
+      const reply = String(req.body?.reply ?? '').trim().slice(0, 1000);
+      if (!reply) {
+        res.status(400).json({ error: 'Reply is required.' });
+        return;
+      }
+
+      const adminReplyAt = new Date().toISOString();
+      const updateResult = await roundFeedback.updateOne(
+        { id: feedbackId },
+        {
+          $set: {
+            adminReply: reply,
+            adminReplyAt,
+            adminReplyBy: adminEmail,
+            userReadAt: '',
+          },
+        },
+      );
+
+      if (updateResult.matchedCount === 0) {
+        res.status(404).json({ error: 'Feedback entry not found.' });
+        return;
+      }
+
+      const updated = await roundFeedback.findOne({ id: feedbackId });
+      res.json({ entry: mapRoundFeedbackEntry(updated ?? {}) });
+    } catch (_error) {
+      res.status(500).json({ error: 'Failed to reply to feedback.' });
+    }
+  });
+
+  app.get('/api/users/:uid/feedback/round', async (req, res) => {
+    try {
+      const { uid } = req.params;
+      const limit = Math.max(1, Math.min(200, Number(req.query.limit ?? 60)));
+      const entries = await roundFeedback
+        .find({ uid })
+        .sort({ timestamp: -1 })
+        .limit(limit)
+        .toArray();
+
+      res.json({
+        entries: entries.map(mapRoundFeedbackEntry),
+      });
+    } catch (_error) {
+      res.status(500).json({ error: 'Failed to load your round feedback.' });
+    }
+  });
+
+  app.put('/api/users/:uid/feedback/round/:feedbackId/read', async (req, res) => {
+    try {
+      const { uid, feedbackId } = req.params;
+
+      const entry = await roundFeedback.findOne({ id: feedbackId, uid });
+      if (!entry) {
+        res.status(404).json({ error: 'Feedback entry not found.' });
+        return;
+      }
+
+      const alreadyRead = typeof entry.userReadAt === 'string' && entry.userReadAt.trim().length > 0;
+      if (!alreadyRead) {
+        await roundFeedback.updateOne(
+          { id: feedbackId, uid },
+          { $set: { userReadAt: new Date().toISOString() } },
+        );
+      }
+
+      const updated = await roundFeedback.findOne({ id: feedbackId, uid });
+      res.json({ entry: mapRoundFeedbackEntry(updated ?? {}) });
+    } catch (_error) {
+      res.status(500).json({ error: 'Failed to mark feedback notification as read.' });
     }
   });
 
@@ -566,6 +998,10 @@ async function createApp() {
         rating,
         note: String(req.body?.note ?? '').slice(0, 1000),
         timestamp: new Date().toISOString(),
+        adminReply: '',
+        adminReplyAt: '',
+        adminReplyBy: '',
+        userReadAt: '',
       };
 
       await roundFeedback.insertOne(payload);

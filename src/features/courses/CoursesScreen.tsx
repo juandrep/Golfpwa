@@ -5,6 +5,7 @@ import type { Course, Hole } from '../../domain/types';
 import { Button, Card, EmptyState, Input } from '../../ui/components';
 import { tileSources, useAppStore } from '../../app/store';
 import { buildRasterMapStyle, MAP_MAX_ZOOM } from '../../app/mapStyle';
+import { useI18n } from '../../app/i18n';
 
 const emptyHole = (number: number): Hole => ({
   number,
@@ -21,6 +22,7 @@ const emptyHole = (number: number): Hole => ({
 type PickTarget = 'front' | 'middle' | 'back' | 'hazard';
 
 function CourseEditor() {
+  const { t } = useI18n();
   const saveCourse = useAppStore((s) => s.saveCourse);
   const tileSourceId = useAppStore((s) => s.tileSourceId);
   const [name, setName] = useState('');
@@ -71,44 +73,45 @@ function CourseEditor() {
   };
 
   return (
-    <Card className="border-emerald-100 bg-emerald-50/60">
-      <h3 className="mb-2 font-semibold">Create course</h3>
+    <Card className="border-cyan-200 bg-cyan-50/70">
+      <h3 className="mb-2 font-semibold">{t('courses.createCourse')}</h3>
       <div className="space-y-2">
-        <Input placeholder="Course name" value={name} onChange={(e) => setName(e.target.value)} />
+        <Input placeholder={t('courses.courseName')} value={name} onChange={(e) => setName(e.target.value)} />
         <div className="grid grid-cols-2 gap-2">
-          <Input placeholder="Base lat" value={lat} onChange={(e) => setLat(e.target.value)} />
-          <Input placeholder="Base lng" value={lng} onChange={(e) => setLng(e.target.value)} />
+          <Input placeholder={t('courses.baseLat')} value={lat} onChange={(e) => setLat(e.target.value)} />
+          <Input placeholder={t('courses.baseLng')} value={lng} onChange={(e) => setLng(e.target.value)} />
         </div>
         <div className="grid grid-cols-4 gap-1 text-xs">
-          {(['front', 'middle', 'back', 'hazard'] as PickTarget[]).map((t) => (
+          {(['front', 'middle', 'back', 'hazard'] as PickTarget[]).map((target) => (
             <button
-              key={t}
-              onClick={() => setPickTarget(t)}
-              className={`rounded border border-gray-200 p-1 font-medium ${pickTarget === t ? 'bg-emerald-700 text-white' : 'bg-white text-gray-700'}`}
+              key={target}
+              onClick={() => setPickTarget(target)}
+              className={`rounded border border-slate-200 p-1 font-medium ${pickTarget === target ? 'bg-gradient-to-r from-cyan-500 to-sky-500 text-white' : 'bg-white text-slate-700'}`}
             >
-              Pick {t}
+              {`${t('courses.pick')} ${target}`}
             </button>
           ))}
         </div>
-        <div ref={mapEl} className="h-48 overflow-hidden rounded-xl border border-gray-200 bg-white" />
-        <Button disabled={!name.trim()} onClick={createCourse}>Save course</Button>
+        <div ref={mapEl} className="h-48 overflow-hidden rounded-xl border border-slate-200 bg-white" />
+        <Button disabled={!name.trim()} onClick={createCourse}>{t('courses.saveCourse')}</Button>
       </div>
     </Card>
   );
 }
 
 export function CoursesScreen() {
+  const { t } = useI18n();
   const courses = useAppStore((s) => s.courses);
   return (
     <div className="space-y-3 pb-20">
       <CourseEditor />
       {courses.length === 0 ? (
-        <EmptyState title="No courses yet" desc="Create your first course to start a round." />
+        <EmptyState title={t('courses.noCourses')} desc={t('courses.createFirstCourse')} />
       ) : (
         courses.map((course) => (
           <Card key={course.id}>
             <h3 className="font-semibold">{course.name}</h3>
-            <p className="text-sm text-gray-500">{course.holes.length} holes</p>
+            <p className="text-sm text-slate-500">{course.holes.length} {t('courses.holes')}</p>
           </Card>
         ))
       )}

@@ -28,7 +28,7 @@ export function ToastProvider({ children }: PropsWithChildren) {
     <ToastContext.Provider value={value}>
       {children}
       {toast && (
-        <div className="fixed left-1/2 top-4 z-50 w-[90%] max-w-md -translate-x-1/2 rounded-xl bg-gray-900 px-4 py-3 text-sm text-white shadow-soft">
+        <div className="fixed left-1/2 top-4 z-50 w-[90%] max-w-md -translate-x-1/2 rounded-xl border border-white/40 bg-slate-950/92 px-4 py-3 text-sm text-white shadow-[0_14px_30px_rgba(15,23,42,0.35)] backdrop-blur-sm">
           {toast.message}
         </div>
       )}

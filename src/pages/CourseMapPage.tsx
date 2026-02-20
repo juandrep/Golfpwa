@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { HoleMap } from '../components/HoleMap';
 import { courseOptions, type CourseId, type HoleMapData } from '../data/courseMapData';
 import { getHoleFromCourseMap } from '../data/courseMapRepository';
@@ -63,23 +64,33 @@ export function CourseMapPage() {
       ) : !hole ? (
         <Card>{t('courseMap.noHoleData')}</Card>
       ) : (
-        <Card className="space-y-4">
-          <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
-            <div><p className="text-gray-500">{t('courseMap.par')}</p><p className="text-base font-semibold">{hole.par}</p></div>
-            <div><p className="text-gray-500">{t('courseMap.strokeIndex')}</p><p className="text-base font-semibold">{hole.strokeIndex}</p></div>
-            <div><p className="text-gray-500">{t('courseMap.teeWhite')}</p><p className="text-base font-semibold">{hole.yardages.white}m</p></div>
-            <div><p className="text-gray-500">{t('courseMap.teeYellow')}</p><p className="text-base font-semibold">{hole.yardages.yellow}m</p></div>
-          </div>
-          {hole.yardages.red && <p className="text-sm text-gray-600">{t('courseMap.teeRed')}: {hole.yardages.red}m</p>}
-          {hole.yardages.orange && <p className="text-sm text-gray-600">{t('courseMap.teeOrange')}: {hole.yardages.orange}m</p>}
-          {hole.layoutSummary && (
-            <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-sm text-emerald-900">
-              <p className="font-semibold">{t('courseMap.layoutSummary')}</p>
-              <p>{hole.layoutSummary}</p>
-            </div>
-          )}
-          <HoleMap hole={hole} />
-        </Card>
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={`${courseId}-${holeNumber}`}
+            initial={{ opacity: 0, y: 12, scale: 0.99 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -10, scale: 0.99 }}
+            transition={{ duration: 0.22, ease: 'easeOut' }}
+          >
+            <Card className="space-y-4">
+              <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
+                <div><p className="text-gray-500">{t('courseMap.par')}</p><p className="text-base font-semibold">{hole.par}</p></div>
+                <div><p className="text-gray-500">{t('courseMap.strokeIndex')}</p><p className="text-base font-semibold">{hole.strokeIndex}</p></div>
+                <div><p className="text-gray-500">{t('courseMap.teeWhite')}</p><p className="text-base font-semibold">{hole.yardages.white}m</p></div>
+                <div><p className="text-gray-500">{t('courseMap.teeYellow')}</p><p className="text-base font-semibold">{hole.yardages.yellow}m</p></div>
+              </div>
+              {hole.yardages.red && <p className="text-sm text-gray-600">{t('courseMap.teeRed')}: {hole.yardages.red}m</p>}
+              {hole.yardages.orange && <p className="text-sm text-gray-600">{t('courseMap.teeOrange')}: {hole.yardages.orange}m</p>}
+              {hole.layoutSummary && (
+                <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-sm text-emerald-900">
+                  <p className="font-semibold">{t('courseMap.layoutSummary')}</p>
+                  <p>{hole.layoutSummary}</p>
+                </div>
+              )}
+              <HoleMap hole={hole} />
+            </Card>
+          </motion.div>
+        </AnimatePresence>
       )}
     </section>
   );

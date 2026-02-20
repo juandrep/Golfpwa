@@ -94,17 +94,71 @@ export interface HoleScore {
   fir?: boolean;
 }
 
+export type RoundFormat = 'stroke-play' | 'stableford' | 'match-play' | 'scramble';
+
+export interface RoundWeatherContext {
+  temperatureC?: number;
+  windKph?: number;
+  condition?: string;
+  source?: string;
+  fetchedAt: string;
+}
+
+export interface RoundShot {
+  id: Id;
+  holeNumber: number;
+  club: string;
+  location: LatLng;
+  recordedAt: string;
+  distanceFromPreviousMeters?: number;
+}
+
 export interface Round {
   id: Id;
   courseId: Id;
   teeId?: Id;
+  format?: RoundFormat;
+  teamId?: Id;
+  teamEventId?: Id;
+  weather?: RoundWeatherContext;
   handicapAtStart?: number;
   currentHoleNumber?: number;
   startedAt: string;
   completedAt?: string;
   updatedAt?: string;
   scores: HoleScore[];
+  shots?: RoundShot[];
   stablefordEnabled: boolean;
+}
+
+export interface TeamMember {
+  uid: string;
+  email: string;
+  displayName: string;
+  joinedAt: string;
+}
+
+export interface Team {
+  id: Id;
+  name: string;
+  inviteCode: string;
+  ownerUid: string;
+  isPrivate: boolean;
+  members: TeamMember[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TeamEvent {
+  id: Id;
+  teamId: Id;
+  name: string;
+  format: RoundFormat;
+  startsAt: string;
+  endsAt: string;
+  createdByUid: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export type PlayerRole = 'member' | 'visitor';
@@ -135,6 +189,11 @@ export interface UserProfile {
   membershipStatus: MembershipStatus;
   handicapIndex: string;
   homeCourse: string;
+  lastRoundSetup?: {
+    courseId: string;
+    teeId?: string;
+    format: RoundFormat;
+  };
   onboardingCompletedAt?: string;
   updatedAt: string;
 }

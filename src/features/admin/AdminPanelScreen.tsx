@@ -16,6 +16,7 @@ import {
   type RoundFeedbackEntry,
 } from '../../data';
 import { getTeeDisplay, sortTeeOptions } from '../../domain/tee';
+import { useI18n } from '../../app/i18n';
 
 type MarkerTarget = 'green-front' | 'green-middle' | 'green-back';
 type PointTarget = 'tee' | MarkerTarget;
@@ -103,6 +104,7 @@ function buildEmptyCourse(courseName: string, clubName: string, locationName: st
 }
 
 export function AdminPanelScreen() {
+  const { t } = useI18n();
   const { showToast } = useToast();
   const { user } = useAuth();
   const { courses, saveCourse, tileSourceId } = useAppStore();
@@ -133,6 +135,8 @@ export function AdminPanelScreen() {
   const [feedbackEntries, setFeedbackEntries] = useState<RoundFeedbackEntry[]>([]);
   const [feedbackLoading, setFeedbackLoading] = useState(false);
   const [feedbackCourseFilter, setFeedbackCourseFilter] = useState('all');
+  const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
+  const [replyingFeedbackId, setReplyingFeedbackId] = useState('');
   const [mapReadyToken, setMapReadyToken] = useState(0);
 
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
@@ -246,7 +250,7 @@ export function AdminPanelScreen() {
       const members = await apiClient.listMembers(adminEmail, 'pending');
       setPendingMembers(members);
     } catch {
-      showToast('Unable to load pending member approvals.');
+      showToast(t('admin.unableLoadPendingMembers'));
     } finally {
       setMembersLoading(false);
     }
@@ -259,7 +263,7 @@ export function AdminPanelScreen() {
       const logs = await apiClient.listCourseAuditLogs(adminEmail, courseId, 40);
       setCourseAuditLogs(logs);
     } catch {
-      showToast('Unable to load course audit trail.');
+      showToast(t('admin.unableLoadAuditTrail'));
     } finally {
       setAuditLoading(false);
     }
@@ -271,10 +275,41 @@ export function AdminPanelScreen() {
     try {
       const entries = await apiClient.listRoundFeedback(adminEmail, courseId, 80);
       setFeedbackEntries(entries);
+      setReplyDrafts((previous) => {
+        const nextDrafts = { ...previous };
+        entries.forEach((entry) => {
+          if (!(entry.id in nextDrafts)) {
+            nextDrafts[entry.id] = entry.adminReply ?? '';
+          }
+        });
+        return nextDrafts;
+      });
     } catch {
-      showToast('Unable to load round feedback.');
+      showToast(t('admin.unableLoadRoundFeedback'));
     } finally {
       setFeedbackLoading(false);
+    }
+  };
+
+  const replyToRoundFeedback = async (feedbackId: string) => {
+    if (!adminEmail) return;
+    const reply = (replyDrafts[feedbackId] ?? '').trim();
+    if (!reply) {
+      showToast(t('admin.replyCannotBeEmpty'));
+      return;
+    }
+    setReplyingFeedbackId(feedbackId);
+    try {
+      const updated = await apiClient.replyRoundFeedback(adminEmail, feedbackId, reply);
+      setFeedbackEntries((previous) => previous.map((entry) => (
+        entry.id === feedbackId ? updated : entry
+      )));
+      setReplyDrafts((previous) => ({ ...previous, [feedbackId]: updated.adminReply }));
+      showToast(t('admin.replySent'));
+    } catch {
+      showToast(t('admin.unableSendReply'));
+    } finally {
+      setReplyingFeedbackId('');
     }
   };
 
@@ -284,7 +319,7 @@ export function AdminPanelScreen() {
       const log = await apiClient.addCourseAuditLog(adminEmail, selectedCourseId, action, details);
       setCourseAuditLogs((previous) => [log, ...previous].slice(0, 40));
     } catch {
-      showToast('Failed to write audit log.');
+      showToast(t('admin.failedWriteAuditLog'));
     }
   };
 
@@ -332,7 +367,7 @@ export function AdminPanelScreen() {
   const addTeeOption = () => {
     const name = newTeeName.trim();
     if (!name) {
-      showToast('Enter tee name first.');
+      showToast(t('admin.enterTeeNameFirst'));
       return;
     }
 
@@ -361,7 +396,7 @@ export function AdminPanelScreen() {
       return key.includes(normalized);
     });
     if (alreadyExists) {
-      showToast(`${label} tee already exists.`);
+      showToast(`${label} ${t('admin.teeAlreadyExistsSuffix')}`);
       return;
     }
 
@@ -440,7 +475,7 @@ export function AdminPanelScreen() {
   const removeNearestHazardVertex = (point: LatLng) => {
     const hazardId = activeHazardIdRef.current;
     if (!hazardId) {
-      showToast('Select a hazard zone first.');
+      showToast(t('admin.selectHazardZoneFirst'));
       return;
     }
 
@@ -476,7 +511,7 @@ export function AdminPanelScreen() {
     });
 
     if (!removed) {
-      showToast('Tap closer to a hazard vertex to delete it.');
+      showToast(t('admin.tapCloserHazardVertex'));
     }
   };
 
@@ -707,7 +742,7 @@ export function AdminPanelScreen() {
       const point = { lat: event.lngLat.lat, lng: event.lngLat.lng };
       if (modeRef.current === 'points') {
         if (pointTargetRef.current === 'tee' && !selectedTeeIdRef.current) {
-          showToast('Add/select a tee first, then tap map to place tee pin.');
+          showToast(t('admin.addSelectTeeFirst'));
           return;
         }
         setPointReference(point);
@@ -1015,8 +1050,8 @@ export function AdminPanelScreen() {
       );
       showToast(
         report.errorCount > 0
-          ? `Draft saved with ${report.errorCount} error(s) and ${report.warningCount} warning(s).`
-          : `Draft saved (${report.warningCount} warning(s)).`,
+          ? `${t('admin.draftSavedWith')} ${report.errorCount} ${t('admin.errorsAnd')} ${report.warningCount} ${t('admin.warnings')}.`
+          : `${t('admin.draftSaved')} (${report.warningCount} ${t('admin.warnings')}).`,
       );
     } finally {
       setSaving(false);
@@ -1028,7 +1063,7 @@ export function AdminPanelScreen() {
     const report = validateCourseGeometry(draftCourse.holes);
     setQaReport(report);
     if (report.errorCount > 0) {
-      showToast(`Cannot publish: ${report.errorCount} QA error(s).`);
+      showToast(`${t('admin.cannotPublish')} ${report.errorCount} ${t('admin.qaErrors')}.`);
       return;
     }
 
@@ -1051,7 +1086,7 @@ export function AdminPanelScreen() {
         'publish_all_holes',
         `Published ${selectedCourse.name} with ${report.warningCount} warning(s) and 0 errors.`,
       );
-      showToast('Course mapping published.');
+      showToast(t('admin.courseMappingPublished'));
     } finally {
       setPublishing(false);
     }
@@ -1061,7 +1096,7 @@ export function AdminPanelScreen() {
     if (!draftCourse || !selectedCourse || !currentHole) return;
     const holeOnlyReport = validateCourseGeometry([currentHole]);
     if (holeOnlyReport.errorCount > 0) {
-      showToast(`Cannot publish hole ${currentHole.number}: ${holeOnlyReport.errorCount} QA error(s).`);
+      showToast(`${t('admin.cannotPublishHole')} ${currentHole.number}: ${holeOnlyReport.errorCount} ${t('admin.qaErrors')}.`);
       return;
     }
 
@@ -1092,7 +1127,7 @@ export function AdminPanelScreen() {
         'publish_single_hole',
         `Published hole ${currentHole.number} for ${selectedCourse.name}.`,
       );
-      showToast(`Hole ${currentHole.number} published.`);
+      showToast(`${t('admin.holePublished')} ${currentHole.number}.`);
     } finally {
       setPublishingHole(false);
     }
@@ -1118,7 +1153,7 @@ export function AdminPanelScreen() {
       updatedAt: now,
     });
     await appendCourseAuditLog('discard_draft', `Discarded draft for ${selectedCourse.name}.`);
-    showToast('Draft discarded.');
+    showToast(t('admin.draftDiscarded'));
   };
 
   const setFromGps = () => {
@@ -1128,7 +1163,7 @@ export function AdminPanelScreen() {
         if (mode === 'points') setPointReference(point);
         else appendPolygonPoint(point);
       },
-      () => showToast('Unable to get GPS position.'),
+      () => showToast(t('admin.unableGpsPosition')),
       { enableHighAccuracy: true },
     );
   };
@@ -1140,11 +1175,11 @@ export function AdminPanelScreen() {
   const createCourseFromPanel = async () => {
     const name = newCourseName.trim();
     if (!name) {
-      showToast('Course name is required.');
+      showToast(t('admin.courseNameRequired'));
       return;
     }
     if (courses.some((course) => course.name.trim().toLowerCase() === name.toLowerCase())) {
-      showToast('A course with this name already exists.');
+      showToast(t('admin.courseNameExists'));
       return;
     }
 
@@ -1157,7 +1192,7 @@ export function AdminPanelScreen() {
       setNewCourseName('');
       setNewCourseClubName('');
       setNewCourseLocationName('');
-      showToast(`Created course ${nextCourse.name}.`);
+      showToast(`${t('admin.createdCourse')} ${nextCourse.name}.`);
     } finally {
       setCreatingCourse(false);
     }
@@ -1173,9 +1208,9 @@ export function AdminPanelScreen() {
         'member_approved',
         `Approved member ${member.displayName || member.email || uid}.`,
       );
-      showToast(`${member.displayName || 'Member'} approved.`);
+      showToast(`${member.displayName || t('admin.member')} ${t('admin.approved')}.`);
     } catch {
-      showToast('Failed to approve member.');
+      showToast(t('admin.failedApproveMember'));
     } finally {
       setApprovingUid('');
     }
@@ -1190,67 +1225,67 @@ export function AdminPanelScreen() {
   return (
     <section className="space-y-4 pb-24">
       <Card>
-        <h2 className="text-xl font-semibold">Admin Control Panel</h2>
-        <p className="mt-1 text-sm text-gray-600">
-          Build accurate hole geometry. Use points for tee/green targets and polygons for fairway, green area, and hazard zones.
+        <h2 className="text-xl font-semibold">{t('admin.controlPanel')}</h2>
+        <p className="mt-1 text-sm text-slate-600">
+          {t('admin.controlPanelDesc')}
         </p>
         <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-          <span className={`rounded-full px-2 py-1 font-semibold ${currentStatusLabel === 'Draft' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
+          <span className={`rounded-full px-2 py-1 font-semibold ${currentStatusLabel === 'Draft' ? 'bg-amber-100 text-amber-800' : 'bg-cyan-100 text-cyan-800'}`}>
             {currentStatusLabel}
           </span>
           {selectedCourse?.publishedAt ? (
-            <span className="rounded-full bg-stone-100 px-2 py-1 text-stone-700">
-              Published: {new Date(selectedCourse.publishedAt).toLocaleString()}
+            <span className="rounded-full bg-slate-100 px-2 py-1 text-slate-700">
+              {t('admin.published')}: {new Date(selectedCourse.publishedAt).toLocaleString()}
             </span>
           ) : null}
         </div>
       </Card>
 
       <Card className="space-y-3">
-        <h3 className="font-semibold">Create Course</h3>
+        <h3 className="font-semibold">{t('admin.createCourse')}</h3>
         <div className="grid gap-3 sm:grid-cols-3">
           <label className="text-sm font-medium">
-            Course Name
+            {t('admin.courseName')}
             <Input
               className="mt-1"
               value={newCourseName}
               onChange={(event) => setNewCourseName(event.target.value)}
-              placeholder="e.g. Gramacho South"
+              placeholder={t('admin.courseNameExample')}
             />
           </label>
           <label className="text-sm font-medium">
-            Club Name
+            {t('admin.clubName')}
             <Input
               className="mt-1"
               value={newCourseClubName}
               onChange={(event) => setNewCourseClubName(event.target.value)}
-              placeholder="Optional"
+              placeholder={t('admin.optional')}
             />
           </label>
           <label className="text-sm font-medium">
-            Location
+            {t('admin.location')}
             <Input
               className="mt-1"
               value={newCourseLocationName}
               onChange={(event) => setNewCourseLocationName(event.target.value)}
-              placeholder="Optional"
+              placeholder={t('admin.optional')}
             />
           </label>
         </div>
         <div className="flex items-center gap-2">
           <Button onClick={() => void createCourseFromPanel()} disabled={creatingCourse}>
-            {creatingCourse ? 'Creating...' : 'Create Course'}
+            {creatingCourse ? t('common.creating') : t('admin.createCourse')}
           </Button>
-          <p className="text-xs text-gray-600">Creates an 18-hole draft template with standard tees.</p>
+          <p className="text-xs text-slate-600">{t('admin.createCourseHint')}</p>
         </div>
       </Card>
 
       <Card className="space-y-3">
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="text-sm font-medium">
-            Course
+            {t('admin.course')}
             <select
-              className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2"
+              className="mt-1 w-full rounded-xl border border-slate-200 bg-white/90 px-3 py-2"
               value={selectedCourseId}
               onChange={(event) => setSelectedCourseId(event.target.value)}
             >
@@ -1261,29 +1296,29 @@ export function AdminPanelScreen() {
           </label>
 
           <label className="text-sm font-medium">
-            Hole
+            {t('admin.hole')}
             <select
-              className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2"
+              className="mt-1 w-full rounded-xl border border-slate-200 bg-white/90 px-3 py-2"
               value={holeNumber}
               onChange={(event) => setHoleNumber(Number(event.target.value))}
             >
               {Array.from({ length: 18 }, (_, idx) => idx + 1).map((value) => (
-                <option key={value} value={value}>Hole {value}</option>
+                <option key={value} value={value}>{t('admin.hole')} {value}</option>
               ))}
             </select>
           </label>
         </div>
 
-        <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-gray-600">Course Tees</p>
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">{t('admin.courseTees')}</p>
           <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_auto]">
             <select
-              className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
+              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
               value={selectedTeeId}
               onChange={(event) => setSelectedTeeId(event.target.value)}
             >
               {orderedDraftTees.length === 0 ? (
-                <option value="">No tees yet</option>
+                <option value="">{t('admin.noTeesYet')}</option>
               ) : (
                 orderedDraftTees.map((tee) => (
                   <option key={tee.id} value={tee.id}>{tee.name}</option>
@@ -1295,17 +1330,17 @@ export function AdminPanelScreen() {
               onClick={removeSelectedTee}
               disabled={!selectedTeeId}
             >
-              Remove Tee
+              {t('admin.removeTee')}
             </Button>
           </div>
           <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_auto]">
             <Input
               value={newTeeName}
               onChange={(event) => setNewTeeName(event.target.value)}
-              placeholder="New tee name (White, Yellow, Red...)"
+              placeholder={t('admin.newTeeNamePlaceholder')}
             />
             <Button variant="secondary" onClick={addTeeOption}>
-              Add Tee
+              {t('admin.addTee')}
             </Button>
           </div>
           <div className="mt-2 flex flex-wrap gap-2">
@@ -1316,7 +1351,7 @@ export function AdminPanelScreen() {
                 className="px-2 py-1 text-xs"
                 onClick={() => addPresetTeeOption(teeLabel)}
               >
-                Add {teeLabel}
+                {t('admin.add')} {teeLabel}
               </Button>
             ))}
           </div>
@@ -1325,17 +1360,17 @@ export function AdminPanelScreen() {
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           <button
             type="button"
-            className={`rounded-xl border px-3 py-2 text-sm ${mode === 'points' ? 'bg-emerald-700 text-white' : ''}`}
+            className={`rounded-xl border border-slate-200 px-3 py-2 text-sm ${mode === 'points' ? 'bg-gradient-to-r from-cyan-500 to-sky-500 text-white' : 'bg-white text-slate-700'}`}
             onClick={() => setMode('points')}
           >
-            Edit Points
+            {t('admin.editPoints')}
           </button>
           <button
             type="button"
-            className={`rounded-xl border px-3 py-2 text-sm ${mode === 'polygons' ? 'bg-emerald-700 text-white' : ''}`}
+            className={`rounded-xl border border-slate-200 px-3 py-2 text-sm ${mode === 'polygons' ? 'bg-gradient-to-r from-cyan-500 to-sky-500 text-white' : 'bg-white text-slate-700'}`}
             onClick={() => setMode('polygons')}
           >
-            Edit Polygons
+            {t('admin.editPolygons')}
           </button>
         </div>
 
@@ -1346,7 +1381,7 @@ export function AdminPanelScreen() {
                 <button
                   key={entry}
                   type="button"
-                  className={`rounded-xl border px-3 py-2 text-sm ${pointTarget === entry ? 'bg-emerald-700 text-white' : ''}`}
+                  className={`rounded-xl border border-slate-200 px-3 py-2 text-sm ${pointTarget === entry ? 'bg-gradient-to-r from-cyan-500 to-sky-500 text-white' : 'bg-white text-slate-700'}`}
                   onClick={() => setPointTargetMode(entry)}
                 >
                   {entry}
@@ -1356,12 +1391,12 @@ export function AdminPanelScreen() {
             {pointTarget === 'tee' ? (
               <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
                 <select
-                  className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
                   value={selectedTeeId}
                   onChange={(event) => setSelectedTeeId(event.target.value)}
                 >
                   {orderedDraftTees.length === 0 ? (
-                    <option value="">No tees configured</option>
+                    <option value="">{t('admin.noTeesConfigured')}</option>
                   ) : (
                     orderedDraftTees.map((tee) => (
                       <option key={tee.id} value={tee.id}>{tee.name}</option>
@@ -1369,12 +1404,12 @@ export function AdminPanelScreen() {
                   )}
                 </select>
                 {selectedTeeId ? (
-                  <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm">
+                  <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
                     <span
-                      className="inline-block h-3.5 w-3.5 rounded-full border border-gray-300"
+                      className="inline-block h-3.5 w-3.5 rounded-full border border-slate-300"
                       style={{ backgroundColor: getTeeDisplay(orderedDraftTees.find((tee) => tee.id === selectedTeeId) ?? null).color }}
                     />
-                    <span className="font-medium">Tee Pin Color</span>
+                    <span className="font-medium">{t('admin.teePinColor')}</span>
                   </div>
                 ) : null}
               </div>
@@ -1387,7 +1422,7 @@ export function AdminPanelScreen() {
                 <button
                   key={entry}
                   type="button"
-                  className={`rounded-xl border px-3 py-2 text-sm ${polygonTarget === entry ? 'bg-emerald-700 text-white' : ''}`}
+                  className={`rounded-xl border border-slate-200 px-3 py-2 text-sm ${polygonTarget === entry ? 'bg-gradient-to-r from-cyan-500 to-sky-500 text-white' : 'bg-white text-slate-700'}`}
                   onClick={() => setPolygonTarget(entry)}
                 >
                   {entry}
@@ -1398,11 +1433,11 @@ export function AdminPanelScreen() {
               <div className="space-y-2">
                 <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
                   <select
-                    className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
                     value={activeHazardId}
                     onChange={(event) => setActiveHazardId(event.target.value)}
                   >
-                    <option value="">Select hazard zone</option>
+                    <option value="">{t('admin.selectHazardZone')}</option>
                     {currentAreas?.hazards.map((hazard) => (
                       <option key={hazard.id} value={hazard.id}>{hazard.name}</option>
                     ))}
@@ -1411,47 +1446,47 @@ export function AdminPanelScreen() {
                     <Input
                       value={newHazardName}
                       onChange={(event) => setNewHazardName(event.target.value)}
-                      placeholder="Hazard name"
+                      placeholder={t('admin.hazardName')}
                     />
-                    <Button variant="secondary" onClick={addHazardZone}>Add</Button>
+                    <Button variant="secondary" onClick={addHazardZone}>{t('admin.add')}</Button>
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
-                    className={`rounded-xl border px-3 py-2 text-sm ${hazardEditMode === 'add' ? 'bg-emerald-700 text-white' : ''}`}
+                    className={`rounded-xl border border-slate-200 px-3 py-2 text-sm ${hazardEditMode === 'add' ? 'bg-gradient-to-r from-cyan-500 to-sky-500 text-white' : 'bg-white text-slate-700'}`}
                     onClick={() => setHazardEditMode('add')}
                   >
-                    Add Points
+                    {t('admin.addPoints')}
                   </button>
                   <button
                     type="button"
-                    className={`rounded-xl border px-3 py-2 text-sm ${hazardEditMode === 'delete' ? 'bg-red-700 text-white' : ''}`}
+                    className={`rounded-xl border border-slate-200 px-3 py-2 text-sm ${hazardEditMode === 'delete' ? 'bg-red-700 text-white' : 'bg-white text-slate-700'}`}
                     onClick={() => setHazardEditMode('delete')}
                   >
-                    Delete Points
+                    {t('admin.deletePoints')}
                   </button>
                 </div>
-                <p className="text-xs text-gray-600">
+                <p className="text-xs text-slate-600">
                   {hazardEditMode === 'add'
-                    ? 'Tap map to append hazard vertices.'
-                    : 'Tap near a hazard vertex to delete it.'}
+                    ? t('admin.tapMapAppendHazard')
+                    : t('admin.tapNearHazardDelete')}
                 </p>
               </div>
             ) : null}
             <div className="flex flex-wrap gap-2">
-              <Button variant="secondary" onClick={undoLastPolygonPoint}>Undo Last Vertex</Button>
-              <Button variant="secondary" onClick={clearPolygon}>Clear Selected Polygon</Button>
-              <p className="self-center text-sm text-gray-600">Vertices: {selectedPolygonPointCount}</p>
+              <Button variant="secondary" onClick={undoLastPolygonPoint}>{t('admin.undoLastVertex')}</Button>
+              <Button variant="secondary" onClick={clearPolygon}>{t('admin.clearSelectedPolygon')}</Button>
+              <p className="self-center text-sm text-slate-600">{t('admin.vertices')}: {selectedPolygonPointCount}</p>
             </div>
           </div>
         )}
 
-        <div ref={mapContainerRef} className="h-[68vh] min-h-[430px] overflow-hidden rounded-xl border border-gray-200" />
+        <div ref={mapContainerRef} className="h-[68vh] min-h-[430px] overflow-hidden rounded-xl border border-slate-200" />
 
-        <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm">
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
           <p className="font-semibold">
-            Mode: {mode === 'points' ? `point (${pointTarget})` : `polygon (${polygonTarget})`}
+            {t('admin.mode')}: {mode === 'points' ? `${t('admin.point')} (${pointTarget})` : `${t('admin.polygon')} (${polygonTarget})`}
           </p>
           {mode === 'points' ? (
             <p>
@@ -1459,74 +1494,105 @@ export function AdminPanelScreen() {
               <strong>{selectedPoint?.lng?.toFixed(7) ?? '-'}</strong>
             </p>
           ) : (
-            <p>Click map to append vertices. Use Undo/Clear for corrections.</p>
+            <p>{t('admin.clickMapAppendVertices')}</p>
           )}
         </div>
 
         <div className="flex flex-wrap gap-2">
           <Button variant="secondary" onClick={setFromGps}>
-            {mode === 'points' ? 'Set Point from GPS' : 'Add Polygon Vertex from GPS'}
+            {mode === 'points' ? t('admin.setPointFromGps') : t('admin.addPolygonVertexFromGps')}
           </Button>
           <Button onClick={() => void saveDraftCourse()} disabled={saving || !draftCourse || !selectedCourse}>
-            {saving ? 'Saving Draft...' : 'Save Draft'}
+            {saving ? t('admin.savingDraft') : t('admin.saveDraft')}
           </Button>
           <Button
             variant="secondary"
             onClick={() => void publishDraftCourse()}
             disabled={publishing || !draftCourse || !selectedCourse}
           >
-            {publishing ? 'Publishing...' : 'Publish All'}
+            {publishing ? t('admin.publishing') : t('admin.publishAll')}
           </Button>
           <Button
             variant="secondary"
             onClick={() => void publishCurrentHole()}
             disabled={publishingHole || !draftCourse || !selectedCourse || !currentHole}
           >
-            {publishingHole ? 'Publishing Hole...' : 'Publish Hole'}
+            {publishingHole ? t('admin.publishingHole') : t('admin.publishHole')}
           </Button>
           <Button variant="ghost" onClick={() => void discardDraft()} disabled={!draftExists}>
-            Discard Draft
+            {t('admin.discardDraft')}
           </Button>
         </div>
       </Card>
 
       <Card className="space-y-3">
         <div className="flex items-center justify-between gap-3">
-          <h3 className="font-semibold">Round Feedback</h3>
+          <h3 className="font-semibold">{t('admin.roundFeedback')}</h3>
           <div className="flex items-center gap-2">
             <select
-              className="rounded-xl border border-gray-200 px-3 py-2 text-sm"
+              className="rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-sm"
               value={feedbackCourseFilter}
               onChange={(event) => setFeedbackCourseFilter(event.target.value)}
             >
-              <option value="all">All courses</option>
+              <option value="all">{t('leaderboard.allCourses')}</option>
               {courses.map((course) => (
                 <option key={course.id} value={course.id}>{course.name}</option>
               ))}
             </select>
             <Button variant="ghost" className="px-2 py-1 text-xs" onClick={() => void refreshRoundFeedback()}>
-              Refresh
+              {t('admin.refresh')}
             </Button>
           </div>
         </div>
         {feedbackLoading ? (
-          <p className="text-sm text-gray-600">Loading feedback...</p>
+          <p className="text-sm text-slate-600">{t('admin.loadingFeedback')}</p>
         ) : feedbackEntries.length === 0 ? (
-          <p className="text-sm text-gray-600">No feedback yet.</p>
+          <p className="text-sm text-slate-600">{t('admin.noFeedbackYet')}</p>
         ) : (
-          <div className="max-h-72 space-y-2 overflow-auto rounded-xl border border-gray-200 bg-gray-50 p-2">
+          <div className="max-h-72 space-y-2 overflow-auto rounded-xl border border-slate-200 bg-slate-50 p-2">
             {feedbackEntries.map((entry) => {
               const courseName = courses.find((course) => course.id === entry.courseId)?.name ?? entry.courseId;
               return (
-                <div key={entry.id} className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm">
+                <div key={entry.id} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
                   <div className="flex items-center justify-between gap-2">
-                    <p className="font-semibold text-gray-900">{courseName}</p>
-                    <p className="text-xs font-semibold text-emerald-700">Rating: {entry.rating}/5</p>
+                    <p className="font-semibold text-slate-900">{courseName}</p>
+                    <p className="text-xs font-semibold text-cyan-700">{t('admin.rating')}: {entry.rating}/5</p>
                   </div>
-                  <p className="mt-1 text-gray-700">{entry.note || 'No note provided.'}</p>
-                  <p className="mt-1 text-xs text-gray-500">
-                    {new Date(entry.timestamp).toLocaleString()} · {entry.email || entry.uid || 'anonymous'} · Round {entry.roundId}
+                  <p className="mt-1 text-slate-700">{entry.note || t('admin.noNoteProvided')}</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {new Date(entry.timestamp).toLocaleString()} · {entry.email || entry.uid || t('admin.anonymous')} · {t('admin.round')} {entry.roundId}
                   </p>
+                  {entry.adminReply ? (
+                    <div className="mt-2 rounded-lg border border-cyan-200 bg-cyan-50 px-2 py-2 text-xs">
+                      <p className="font-semibold text-cyan-800">{t('admin.adminReply')}</p>
+                      <p className="mt-1 whitespace-pre-wrap text-cyan-900">{entry.adminReply}</p>
+                      <p className="mt-1 text-cyan-700">
+                        {entry.adminReplyAt ? new Date(entry.adminReplyAt).toLocaleString() : '-'} · {entry.adminReplyBy || t('nav.admin')}
+                      </p>
+                      <p className="mt-1 text-cyan-700">
+                        {t('admin.userStatus')}: {entry.userReadAt ? `${t('admin.readAt')} ${new Date(entry.userReadAt).toLocaleString()}` : t('admin.unread')}
+                      </p>
+                    </div>
+                  ) : null}
+                  <div className="mt-2 space-y-2">
+                    <label className="block text-xs font-medium text-slate-700">
+                      {t('admin.replyToUser')}
+                      <textarea
+                        className="mt-1 min-h-[68px] w-full rounded-lg border border-slate-200 px-2 py-2 text-sm"
+                        value={replyDrafts[entry.id] ?? ''}
+                        onChange={(event) => setReplyDrafts((previous) => ({ ...previous, [entry.id]: event.target.value }))}
+                        placeholder={t('admin.replyPlaceholder')}
+                      />
+                    </label>
+                    <Button
+                      variant="secondary"
+                      className="px-2 py-1 text-xs"
+                      onClick={() => void replyToRoundFeedback(entry.id)}
+                      disabled={replyingFeedbackId === entry.id}
+                    >
+                      {replyingFeedbackId === entry.id ? t('admin.sending') : entry.adminReply ? t('admin.updateReply') : t('admin.sendReply')}
+                    </Button>
+                  </div>
                 </div>
               );
             })}
@@ -1537,24 +1603,24 @@ export function AdminPanelScreen() {
       {qaReport ? (
         <Card className="space-y-2">
           <div className="flex items-center justify-between">
-            <h3 className="font-semibold">QA Report</h3>
-            <p className="text-xs text-gray-500">{new Date(qaReport.checkedAt).toLocaleString()}</p>
+            <h3 className="font-semibold">{t('admin.qaReport')}</h3>
+            <p className="text-xs text-slate-500">{new Date(qaReport.checkedAt).toLocaleString()}</p>
           </div>
           <div className="flex gap-2 text-xs">
             <span className={`rounded-full px-2 py-1 font-semibold ${qaReport.errorCount > 0 ? 'bg-red-100 text-red-700' : 'bg-stone-100 text-stone-600'}`}>
-              Errors: {qaReport.errorCount}
+              {t('admin.errors')}: {qaReport.errorCount}
             </span>
             <span className={`rounded-full px-2 py-1 font-semibold ${qaReport.warningCount > 0 ? 'bg-amber-100 text-amber-700' : 'bg-stone-100 text-stone-600'}`}>
-              Warnings: {qaReport.warningCount}
+              {t('admin.warnings')}: {qaReport.warningCount}
             </span>
           </div>
           {qaReport.issues.length === 0 ? (
-            <p className="text-sm text-emerald-700">All QA checks passed.</p>
+            <p className="text-sm text-cyan-700">{t('admin.allQaPassed')}</p>
           ) : (
-            <div className="max-h-56 space-y-1 overflow-auto rounded-xl border border-gray-200 bg-gray-50 p-2 text-sm">
+            <div className="max-h-56 space-y-1 overflow-auto rounded-xl border border-slate-200 bg-slate-50 p-2 text-sm">
               {qaReport.issues.map((issue) => (
                 <p key={issue.id} className={issue.severity === 'error' ? 'text-red-700' : 'text-amber-700'}>
-                  Hole {issue.holeNumber}: {issue.message}
+                  {t('admin.hole')} {issue.holeNumber}: {issue.message}
                 </p>
               ))}
             </div>
@@ -1564,31 +1630,31 @@ export function AdminPanelScreen() {
 
       <Card className="space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className="font-semibold">Member Approvals</h3>
+          <h3 className="font-semibold">{t('admin.memberApprovals')}</h3>
           <Button variant="ghost" className="px-2 py-1 text-xs" onClick={() => void refreshPendingMembers()}>
-            Refresh
+            {t('admin.refresh')}
           </Button>
         </div>
         {membersLoading ? (
-          <p className="text-sm text-gray-600">Loading pending members...</p>
+          <p className="text-sm text-slate-600">{t('admin.loadingPendingMembers')}</p>
         ) : pendingMembers.length === 0 ? (
-          <p className="text-sm text-emerald-700">No pending member approvals.</p>
+          <p className="text-sm text-cyan-700">{t('admin.noPendingMembers')}</p>
         ) : (
           <div className="space-y-2">
             {pendingMembers.map((member) => (
               <div
                 key={member.uid}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm"
+                className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm"
               >
                 <div>
                   <p className="font-medium">{member.displayName || member.email}</p>
-                  <p className="text-xs text-gray-600">{member.email}</p>
+                  <p className="text-xs text-slate-600">{member.email}</p>
                 </div>
                 <Button
                   onClick={() => void approveMember(member.uid)}
                   disabled={approvingUid === member.uid}
                 >
-                  {approvingUid === member.uid ? 'Approving...' : 'Approve'}
+                  {approvingUid === member.uid ? t('admin.approving') : t('admin.approve')}
                 </Button>
               </div>
             ))}
@@ -1598,28 +1664,28 @@ export function AdminPanelScreen() {
 
       <Card className="space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className="font-semibold">Course Audit Trail</h3>
+          <h3 className="font-semibold">{t('admin.courseAuditTrail')}</h3>
           <Button
             variant="ghost"
             className="px-2 py-1 text-xs"
             onClick={() => selectedCourseId && void refreshCourseAuditLogs(selectedCourseId)}
             disabled={!selectedCourseId}
           >
-            Refresh
+            {t('admin.refresh')}
           </Button>
         </div>
         {auditLoading ? (
-          <p className="text-sm text-gray-600">Loading audit entries...</p>
+          <p className="text-sm text-slate-600">{t('admin.loadingAuditEntries')}</p>
         ) : courseAuditLogs.length === 0 ? (
-          <p className="text-sm text-gray-600">No audit entries for this course yet.</p>
+          <p className="text-sm text-slate-600">{t('admin.noAuditEntries')}</p>
         ) : (
-          <div className="max-h-64 space-y-2 overflow-auto rounded-xl border border-gray-200 bg-gray-50 p-2">
+          <div className="max-h-64 space-y-2 overflow-auto rounded-xl border border-slate-200 bg-slate-50 p-2">
             {courseAuditLogs.map((entry) => (
-              <div key={entry.id} className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm">
+              <div key={entry.id} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
                 <p className="font-medium">{auditActionLabel(entry.action)}</p>
-                <p className="text-xs text-gray-600">{entry.details}</p>
-                <p className="mt-1 text-[11px] text-gray-500">
-                  {new Date(entry.timestamp).toLocaleString()} by {entry.adminEmail}
+                <p className="text-xs text-slate-600">{entry.details}</p>
+                <p className="mt-1 text-[11px] text-slate-500">
+                  {new Date(entry.timestamp).toLocaleString()} {t('admin.by')} {entry.adminEmail}
                 </p>
               </div>
             ))}

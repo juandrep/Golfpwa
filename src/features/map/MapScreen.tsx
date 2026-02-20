@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { motion } from 'framer-motion';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { haversineMeters } from '../../domain/distance';
@@ -6,8 +7,10 @@ import { toDisplayDistance } from '../../domain/units';
 import { Card, EmptyState } from '../../ui/components';
 import { tileSources, useAppStore } from '../../app/store';
 import { buildRasterMapStyle, MAP_MAX_ZOOM } from '../../app/mapStyle';
+import { useI18n } from '../../app/i18n';
 
 export function MapScreen() {
+  const { t } = useI18n();
   const courses = useAppStore((s) => s.courses);
   const unit = useAppStore((s) => s.unit);
   const tileSourceId = useAppStore((s) => s.tileSourceId);
@@ -45,11 +48,11 @@ export function MapScreen() {
         setUserPos(coord);
         setGpsError('');
       },
-      () => setGpsError('GPS denied or unavailable.'),
+      () => setGpsError(t('map.gpsDenied')),
       { enableHighAccuracy: true },
     );
     return () => navigator.geolocation.clearWatch(id);
-  }, []);
+  }, [t]);
 
   const course = courses[0];
   const hole = course?.holes[0];
@@ -59,16 +62,43 @@ export function MapScreen() {
     back: haversineMeters(userPos, hole.green.back),
   } : undefined;
 
-  if (!course) return <EmptyState title="No cached course" desc="Create/select a course first." />;
+  if (!course) return <EmptyState title={t('map.noCachedCourse')} desc={t('map.createOrSelectCourse')} />;
 
   return (
     <div className="space-y-3 pb-20">
-      {gpsError && <Card className="border border-red-200 text-red-700">{gpsError}</Card>}
-      <div ref={mapEl} className="h-80 overflow-hidden rounded-card shadow-soft" />
-      {toGreen && <Card><p>Front: {toDisplayDistance(toGreen.front, unit)} {unit}</p><p>Middle: {toDisplayDistance(toGreen.middle, unit)} {unit}</p><p>Back: {toDisplayDistance(toGreen.back, unit)} {unit}</p></Card>}
-      {measure !== undefined && <Card>Tap measure: {toDisplayDistance(measure, unit)} {unit}</Card>}
+      {gpsError && (
+        <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}>
+          <Card className="border border-red-200 text-red-700">{gpsError}</Card>
+        </motion.div>
+      )}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.24, ease: 'easeOut' }}
+        ref={mapEl}
+        className="h-80 overflow-hidden rounded-card shadow-soft"
+      />
+      {toGreen && (
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
+          <Card>
+            <p>{t('map.front')}: {toDisplayDistance(toGreen.front, unit)} {unit}</p>
+            <p>{t('map.middle')}: {toDisplayDistance(toGreen.middle, unit)} {unit}</p>
+            <p>{t('map.back')}: {toDisplayDistance(toGreen.back, unit)} {unit}</p>
+          </Card>
+        </motion.div>
+      )}
+      {measure !== undefined && (
+        <motion.div
+          key={Math.round(measure)}
+          initial={{ opacity: 0, scale: 0.96 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.18, ease: 'easeOut' }}
+        >
+          <Card>{t('map.tapMeasure')}: {toDisplayDistance(measure, unit)} {unit}</Card>
+        </motion.div>
+      )}
       <Card>
-        <h3 className="font-semibold">Hazards</h3>
+        <h3 className="font-semibold">{t('map.hazards')}</h3>
         <ul className="text-sm text-gray-600">{hole?.hazards.map((h) => <li key={h.id}>{h.name} {userPos ? `· ${toDisplayDistance(haversineMeters(userPos, h.location), unit)} ${unit}` : ''}</li>)}</ul>
       </Card>
     </div>
