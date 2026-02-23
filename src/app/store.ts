@@ -356,6 +356,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     };
 
     await profileRepository.save(updatedProfile);
+    set({ profile: updatedProfile });
 
     const { authUid } = get();
     if (authUid) {

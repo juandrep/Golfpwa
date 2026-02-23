@@ -165,8 +165,8 @@ function AppShell() {
 
   const needsOnboarding =
     !!user &&
-    !!profile &&
-    !profile.onboardingCompletedAt;
+    !loading &&
+    !profile?.onboardingCompletedAt;
 
   if (authLoading) {
     return <main className="grid min-h-screen place-items-center">{t('common.loading')}</main>;
