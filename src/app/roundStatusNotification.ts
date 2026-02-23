@@ -53,7 +53,6 @@ export async function showRoundStatusNotification(payload: RoundStatusNotificati
   const options: NotificationOptions = {
     body: buildBody(payload),
     tag: ROUND_STATUS_NOTIFICATION_TAG,
-    renotify: false,
     requireInteraction: true,
     silent: true,
     icon: '/android-chrome-192x192.png',
