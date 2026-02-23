@@ -7,9 +7,9 @@ GreenCaddie is a mobile-first, offline-first golf GPS + scorecard PWA built with
 - Tailwind CSS
 - Zustand
 - Dexie (IndexedDB)
-- Firebase Authentication (email/password)
+- Firebase Authentication (Google Sign-In)
 - Express API + MongoDB (cloud sync + leaderboard)
-- MapLibre GL JS + OSM tile sources
+- MapLibre GL JS + selectable tile sources (Esri, OSM HOT, Carto)
 - Vite PWA plugin (Workbox)
 
 ## Features
@@ -29,7 +29,7 @@ GreenCaddie is a mobile-first, offline-first golf GPS + scorecard PWA built with
   - past rounds list
   - avg score, putts/round, GIR%, FIR%, penalty trend
 - Auth + sync:
-  - login/register with Firebase
+  - Google sign-in with Firebase
   - user profile persisted in MongoDB
   - rounds/courses/settings synced to MongoDB per user
   - global leaderboard fed from synced data
@@ -46,7 +46,7 @@ GreenCaddie is a mobile-first, offline-first golf GPS + scorecard PWA built with
 
 ## Local development
 1. `npm install`
-2. Copy `.env.example` to `.env` and set Firebase + MongoDB values
+2. Copy `.env.example` to `.env` and set Firebase (client + admin) + MongoDB values
 3. `npm run server` (API at `http://localhost:3001`)
 4. `npm run dev` (frontend at `http://localhost:5173`)
 5. `npm test`

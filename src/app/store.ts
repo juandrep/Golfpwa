@@ -11,7 +11,13 @@ import {
   apiClient,
   courseRepository,
   db,
+  dedupeCoursesByLatest,
+  dedupeRoundsByLatest,
   ensureSeedData,
+  BACKUP_SCHEMA,
+  BACKUP_VERSION,
+  type AppBackupV1,
+  type BackupImportMode,
   profileRepository,
   roundRepository,
   settingsRepository,
@@ -76,6 +82,11 @@ interface AppState {
   setUnit: (unit: DistanceUnit) => Promise<void>;
   setTileSource: (tileSourceId: string) => Promise<void>;
   saveProfile: (profilePatch: Partial<UserProfile>) => Promise<void>;
+  exportBackup: () => Promise<AppBackupV1>;
+  importBackup: (
+    payload: AppBackupV1,
+    mode: BackupImportMode,
+  ) => Promise<{ coursesImported: number; roundsImported: number }>;
 }
 
 async function loadLocalState() {
@@ -95,6 +106,20 @@ async function loadLocalState() {
     tileSourceId: settings.tileSourceId,
     profile,
   };
+}
+
+async function resetLocalDeviceState(): Promise<void> {
+  await db.transaction(
+    'rw',
+    [db.courses, db.rounds, db.settings, db.profiles, db.activeRound],
+    async () => {
+      await db.courses.clear();
+      await db.rounds.clear();
+      await db.settings.clear();
+      await db.profiles.clear();
+      await db.activeRound.clear();
+    },
+  );
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -125,11 +150,13 @@ export const useAppStore = create<AppState>((set, get) => ({
         set({ syncState: 'local_only', syncMessage: 'Sync failed. Working locally.' });
       }
     } else {
-      await db.rounds.clear();
-      await db.activeRound.clear();
-      await db.profiles.clear();
+      await resetLocalDeviceState();
       await ensureSeedData();
-      set({ leaderboard: [], syncState: 'local_only', syncMessage: undefined });
+      set({
+        leaderboard: [],
+        syncState: 'local_only',
+        syncMessage: 'Signed out. Local device data cleared.',
+      });
     }
 
     await get().refresh();
@@ -343,5 +370,67 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     await get().refresh();
     await get().refreshLeaderboard('week', 'all', 'combined');
+  },
+  exportBackup: async () => {
+    const [courses, rounds] = await Promise.all([
+      courseRepository.list(),
+      roundRepository.list(),
+    ]);
+
+    return {
+      schema: BACKUP_SCHEMA,
+      version: BACKUP_VERSION,
+      exportedAt: new Date().toISOString(),
+      appVersion: '',
+      data: {
+        courses: dedupeCoursesByLatest(courses),
+        rounds: dedupeRoundsByLatest(rounds),
+      },
+    };
+  },
+  importBackup: async (payload, mode) => {
+    const importedCourses = dedupeCoursesByLatest(payload.data.courses ?? []);
+    const importedRounds = dedupeRoundsByLatest(payload.data.rounds ?? []);
+
+    if (mode === 'replace') {
+      await db.transaction(
+        'rw',
+        [db.courses, db.rounds, db.activeRound],
+        async () => {
+          await db.courses.clear();
+          await db.rounds.clear();
+          await db.activeRound.clear();
+          if (importedCourses.length > 0) await db.courses.bulkPut(importedCourses);
+          if (importedRounds.length > 0) await db.rounds.bulkPut(importedRounds);
+        },
+      );
+    } else {
+      const [existingCourses, existingRounds] = await Promise.all([
+        courseRepository.list(),
+        roundRepository.list(),
+      ]);
+      const mergedCourses = dedupeCoursesByLatest([...existingCourses, ...importedCourses]);
+      const mergedRounds = dedupeRoundsByLatest([...existingRounds, ...importedRounds]);
+
+      await db.transaction(
+        'rw',
+        [db.courses, db.rounds],
+        async () => {
+          if (mergedCourses.length > 0) await db.courses.bulkPut(mergedCourses);
+          if (mergedRounds.length > 0) await db.rounds.bulkPut(mergedRounds);
+        },
+      );
+    }
+
+    set({
+      syncState: 'local_only',
+      syncMessage: `Backup ${mode === 'replace' ? 'replaced' : 'merged'} locally.`,
+    });
+    await get().refresh();
+    await get().refreshLeaderboard('week', 'all', 'combined');
+    return {
+      coursesImported: importedCourses.length,
+      roundsImported: importedRounds.length,
+    };
   },
 }));

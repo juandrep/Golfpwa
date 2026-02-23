@@ -53,6 +53,16 @@ function getHoleBearing(from: LatLng, to: LatLng): number {
   return (Math.atan2(dLng, dLat) * 180) / Math.PI;
 }
 
+function getReadableTextColor(backgroundHex: string): string {
+  const normalized = backgroundHex.trim().replace('#', '');
+  if (!/^[0-9a-f]{6}$/i.test(normalized)) return '#ffffff';
+  const r = Number.parseInt(normalized.slice(0, 2), 16);
+  const g = Number.parseInt(normalized.slice(2, 4), 16);
+  const b = Number.parseInt(normalized.slice(4, 6), 16);
+  const luminance = (0.299 * r) + (0.587 * g) + (0.114 * b);
+  return luminance > 170 ? '#0f172a' : '#ffffff';
+}
+
 export function LiveHolePanel({ hole, teeOption = null }: Props) {
   const { t } = useI18n();
   const unit = useAppStore((state) => state.unit);
@@ -79,6 +89,7 @@ export function LiveHolePanel({ hole, teeOption = null }: Props) {
   const [holeTransitioning, setHoleTransitioning] = useState(true);
 
   const teeDisplay = useMemo(() => getTeeDisplay(teeOption), [teeOption]);
+  const teeBadgeTextColor = useMemo(() => getReadableTextColor(teeDisplay.color), [teeDisplay.color]);
   const teePoint = useMemo(() => getHoleTeePoint(hole, teeOption), [hole, teeOption]);
   const zones = useMemo(() => getHoleZones(hole), [hole]);
   const holeBearing = useMemo(
@@ -273,7 +284,7 @@ export function LiveHolePanel({ hole, teeOption = null }: Props) {
     return () => {
       navigator.geolocation.clearWatch(watchId);
     };
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     layupModeRef.current = layupMode;
@@ -457,7 +468,7 @@ export function LiveHolePanel({ hole, teeOption = null }: Props) {
       map.remove();
       mapRef.current = null;
     };
-  }, [
+  }, [ // eslint-disable-line react-hooks/exhaustive-deps
     hole.green.middle.lat,
     hole.green.middle.lng,
     holeBearing,
@@ -504,7 +515,7 @@ export function LiveHolePanel({ hole, teeOption = null }: Props) {
     if (!followMe) {
       frameHoleCamera(mapRef.current, 520);
     }
-  }, [
+  }, [ // eslint-disable-line react-hooks/exhaustive-deps
     followMe,
     hole.green.middle.lng,
     hole.green.middle.lat,
@@ -520,7 +531,7 @@ export function LiveHolePanel({ hole, teeOption = null }: Props) {
   useEffect(() => {
     if (!mapRef.current || !mapReadyToken || followMe) return;
     frameHoleCamera(mapRef.current, 380);
-  }, [followMe, holeBearing, lockNorth, mapReadyToken, zones.fairway, zones.green]);
+  }, [followMe, holeBearing, lockNorth, mapReadyToken, zones.fairway, zones.green]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!mapRef.current || !mapReadyToken) return;
@@ -528,7 +539,7 @@ export function LiveHolePanel({ hole, teeOption = null }: Props) {
     return () => {
       clearCinematicTimers();
     };
-  }, [hole.number, mapReadyToken]);
+  }, [hole.number, mapReadyToken]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!mapRef.current) return;
@@ -620,7 +631,7 @@ export function LiveHolePanel({ hole, teeOption = null }: Props) {
       };
     });
     nodeSource.setData({ type: 'FeatureCollection', features: nodeFeatures });
-  }, [
+  }, [ // eslint-disable-line react-hooks/exhaustive-deps
     hole.green.middle.lat,
     hole.green.middle.lng,
     mapReadyToken,
@@ -761,7 +772,10 @@ export function LiveHolePanel({ hole, teeOption = null }: Props) {
             {t('liveHole.pinSheet')}
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-700">
+            <div
+              className="rounded-full border border-white/55 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em]"
+              style={{ backgroundColor: teeDisplay.color, color: teeBadgeTextColor }}
+            >
               {teeDisplay.label} Tee
             </div>
             <div className="rounded-full bg-gradient-to-r from-cyan-500 to-sky-500 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-white">
@@ -891,7 +905,10 @@ export function LiveHolePanel({ hole, teeOption = null }: Props) {
             {t('liveHole.pinSheet')}
           </p>
           <div className="flex items-center gap-1.5">
-            <p className="rounded-full bg-white px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-stone-700">
+            <p
+              className="rounded-full border border-stone-300 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide"
+              style={{ backgroundColor: teeDisplay.color, color: teeBadgeTextColor }}
+            >
               {teeDisplay.label} Tee
             </p>
             <p className="rounded-full bg-emerald-600 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-white">

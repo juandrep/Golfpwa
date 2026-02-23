@@ -75,7 +75,7 @@ export function Modal({ open, title, onClose, children }: PropsWithChildren<{ op
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-40 grid place-items-end bg-slate-950/55 p-4 backdrop-blur-[1px] sm:place-items-center"
+          className="fixed inset-0 z-40 grid items-end justify-items-center bg-slate-950/55 p-4 backdrop-blur-[1px] sm:place-items-center"
         >
           <motion.div
             initial={{ opacity: 0, y: 20, scale: 0.98 }}

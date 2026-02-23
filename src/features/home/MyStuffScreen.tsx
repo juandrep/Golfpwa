@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { motion } from 'framer-motion';
 import { useAppStore } from '../../app/store';
 import { AnimatedNumber, Card, Button, Badge, Input } from '../../ui/components';
@@ -9,6 +9,12 @@ import { computeHandicap } from '../../domain/handicap';
 import type { RoundFormat } from '../../domain/types';
 import { tileSources } from '../../app/store';
 import { useI18n } from '../../app/i18n';
+import {
+  parseBackupText,
+  type AppBackupV1,
+  type BackupImportMode,
+  type BackupPreview,
+} from '../../data';
 
 interface Props {
   onNavigate: (path: string) => void;
@@ -26,6 +32,8 @@ export function MyStuffScreen({ onNavigate }: Props) {
     tileSourceId,
     setTileSource,
     saveProfile,
+    exportBackup,
+    importBackup,
   } = useAppStore();
   const { user } = useAuth();
   const { showToast } = useToast();
@@ -51,6 +59,15 @@ export function MyStuffScreen({ onNavigate }: Props) {
   const [eventStartsAt, setEventStartsAt] = useState('');
   const [eventEndsAt, setEventEndsAt] = useState('');
   const [creatingEvent, setCreatingEvent] = useState(false);
+  const [backupBusy, setBackupBusy] = useState(false);
+  const [importMode, setImportMode] = useState<BackupImportMode>('merge');
+  const [selectedBackupName, setSelectedBackupName] = useState('');
+  const [backupPreview, setBackupPreview] = useState<BackupPreview | null>(null);
+  const [backupPayload, setBackupPayload] = useState<AppBackupV1 | null>(null);
+  const [backupWarnings, setBackupWarnings] = useState<string[]>([]);
+  const [backupError, setBackupError] = useState('');
+  const [showAdvancedSections, setShowAdvancedSections] = useState(false);
+  const backupFileInputRef = useRef<HTMLInputElement | null>(null);
   const stats = useMemo(() => {
     if (rounds.length === 0) {
       return { best: '-', avg: '-', rounds: 0 };
@@ -125,9 +142,9 @@ export function MyStuffScreen({ onNavigate }: Props) {
     };
 
     void loadFeedbackNotifications();
-  }, [showToast, user?.uid]);
+  }, [showToast, t, user?.uid]);
 
-  const loadTeams = async () => {
+  const loadTeams = useCallback(async () => {
     if (!user?.uid) {
       setTeams([]);
       return;
@@ -145,11 +162,11 @@ export function MyStuffScreen({ onNavigate }: Props) {
     } finally {
       setTeamsLoading(false);
     }
-  };
+  }, [selectedTeamId, showToast, t, user?.uid]);
 
   useEffect(() => {
     void loadTeams();
-  }, [user?.uid]);
+  }, [loadTeams]);
 
   useEffect(() => {
     if (!selectedTeamId) {
@@ -258,6 +275,74 @@ export function MyStuffScreen({ onNavigate }: Props) {
       showToast(t('myStuff.unableCreateEvent'));
     } finally {
       setCreatingEvent(false);
+    }
+  };
+
+  const exportJsonBackup = async () => {
+    setBackupBusy(true);
+    try {
+      const payload = await exportBackup();
+      const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const filename = `greencaddie-backup-${stamp}.json`;
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      showToast(t('myStuff.backupExported'));
+    } catch {
+      showToast(t('myStuff.backupExportFailed'));
+    } finally {
+      setBackupBusy(false);
+    }
+  };
+
+  const onBackupFileSelected = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setBackupBusy(true);
+    setBackupError('');
+    setBackupWarnings([]);
+    setBackupPreview(null);
+    setBackupPayload(null);
+    setSelectedBackupName(file.name);
+
+    try {
+      const text = await file.text();
+      const parsed = parseBackupText(text);
+      setBackupPreview(parsed.preview);
+      setBackupPayload(parsed.payload);
+      setBackupWarnings(parsed.warnings);
+      showToast(t('myStuff.backupFileLoaded'));
+    } catch (error) {
+      setBackupError((error as Error).message || t('myStuff.backupInvalid'));
+      showToast(t('myStuff.backupInvalid'));
+    } finally {
+      setBackupBusy(false);
+      event.target.value = '';
+    }
+  };
+
+  const applyJsonBackupImport = async () => {
+    if (!backupPayload) return;
+    setBackupBusy(true);
+    setBackupError('');
+    try {
+      const result = await importBackup(backupPayload, importMode);
+      setBackupPreview(null);
+      setBackupPayload(null);
+      setBackupWarnings([]);
+      setSelectedBackupName('');
+      showToast(`${t('myStuff.backupImported')} ${result.coursesImported} ${t('home.courses')} · ${result.roundsImported} ${t('myStuff.rounds')}`);
+    } catch {
+      showToast(t('myStuff.backupImportFailed'));
+    } finally {
+      setBackupBusy(false);
     }
   };
 
@@ -397,212 +482,305 @@ export function MyStuffScreen({ onNavigate }: Props) {
         </Button>
       </Card>
 
-      <Card>
-        <h3 className="font-semibold">{t('myStuff.handicapEngine')}</h3>
-        <p className="mt-1 text-sm text-slate-700">
-          {t('myStuff.autoIndex')}: <strong>{handicap.index !== null ? handicap.index.toFixed(1) : '-'}</strong>
+      <Card className="space-y-2">
+        <div className="flex items-center justify-between">
+          <h3 className="font-semibold text-slate-900">{t('myStuff.quickAccess')}</h3>
+          <Badge>{showAdvancedSections ? t('buttons.close') : t('buttons.open')}</Badge>
+        </div>
+        <p className="text-sm text-slate-600">
+          {showAdvancedSections ? t('home.pickFlow') : t('myStuff.dashboard')}
         </p>
-        <p className="text-xs text-slate-500">
-          {t('myStuff.basedOn')} {handicap.candidates.length} {t('myStuff.validDifferentials')} {t('myStuff.using')} {handicap.used.length}.
-        </p>
+        <Button variant="secondary" className="w-full" onClick={() => setShowAdvancedSections((previous) => !previous)}>
+          {showAdvancedSections ? t('buttons.close') : t('buttons.open')}
+        </Button>
       </Card>
 
-      <Card>
-        <h3 className="font-semibold">{t('myStuff.clubDistanceStats')}</h3>
-        {clubStats.length === 0 ? (
-          <p className="mt-1 text-sm text-slate-500">{t('myStuff.logShotsHint')}</p>
-        ) : (
-          <div className="mt-2 space-y-2">
-            {clubStats.map((entry) => (
-              <div key={entry.club} className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-sm">
-                <div>
-                  <p className="font-semibold">{entry.club}</p>
-                  <p className="text-xs text-slate-500">{entry.shots} {t('myStuff.trackedShots')}</p>
-                </div>
-                <p className="text-right text-xs text-slate-700">
-                  {t('myStuff.avg')} {Math.round(entry.avg)}m
-                  <br />
-                  {t('myStuff.max')} {Math.round(entry.max)}m
-                </p>
-              </div>
-            ))}
-          </div>
-        )}
-      </Card>
+      {showAdvancedSections ? (
+        <>
+          <Card>
+            <h3 className="font-semibold">{t('myStuff.handicapEngine')}</h3>
+            <p className="mt-1 text-sm text-slate-700">
+              {t('myStuff.autoIndex')}: <strong>{handicap.index !== null ? handicap.index.toFixed(1) : '-'}</strong>
+            </p>
+            <p className="text-xs text-slate-500">
+              {t('myStuff.basedOn')} {handicap.candidates.length} {t('myStuff.validDifferentials')} {t('myStuff.using')} {handicap.used.length}.
+            </p>
+          </Card>
 
-      <Card>
-        <h3 className="font-semibold">{t('myStuff.teamsEvents')}</h3>
-        <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_auto]">
-          <input
-            className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
-            value={teamName}
-            onChange={(event) => setTeamName(event.target.value)}
-            placeholder={t('myStuff.createTeamName')}
-          />
-          <Button onClick={() => void createTeam()} disabled={creatingTeam}>
-            {creatingTeam ? t('common.creating') : t('myStuff.createTeam')}
-          </Button>
-        </div>
-        <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_auto]">
-          <input
-            className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
-            value={inviteCode}
-            onChange={(event) => setInviteCode(event.target.value.toUpperCase())}
-            placeholder={t('myStuff.joinInviteCode')}
-          />
-          <Button variant="secondary" onClick={() => void joinTeam()} disabled={joiningTeam}>
-            {joiningTeam ? t('common.joining') : t('myStuff.joinTeam')}
-          </Button>
-        </div>
-        {teamsLoading ? (
-          <div className="mt-2 space-y-2">
-            <div className="h-10 animate-pulse rounded-xl bg-slate-100" />
-            <div className="h-10 animate-pulse rounded-xl bg-slate-100" />
-          </div>
-        ) : teams.length === 0 ? (
-          <div className="mt-2 space-y-2">
-            <p className="text-sm text-slate-500">{t('myStuff.noTeams')}</p>
-            <Button className="px-3 py-2 text-xs" variant="secondary" onClick={() => onNavigate('/enter-score')}>
-              {t('myStuff.ctaStartRound')}
-            </Button>
-          </div>
-        ) : (
-          <>
-            <select
-              className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
-              value={selectedTeamId}
-              onChange={(event) => setSelectedTeamId(event.target.value)}
-            >
-              {teams.map((team) => (
-                <option key={team.id} value={team.id}>{team.name} · {t('myStuff.invite')} {team.inviteCode}</option>
-              ))}
-            </select>
-
-            <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{t('myStuff.createEventRound')}</p>
-              <div className="mt-2 grid gap-2 sm:grid-cols-3">
-                <input
-                  className="rounded-lg border border-slate-200 px-2 py-2 text-sm"
-                  value={eventName}
-                  onChange={(event) => setEventName(event.target.value)}
-                  placeholder={t('myStuff.eventNamePlaceholder')}
-                />
-                <input
-                  type="datetime-local"
-                  className="rounded-lg border border-slate-200 px-2 py-2 text-sm"
-                  value={eventStartsAt}
-                  onChange={(event) => setEventStartsAt(event.target.value)}
-                />
-                <input
-                  type="datetime-local"
-                  className="rounded-lg border border-slate-200 px-2 py-2 text-sm"
-                  value={eventEndsAt}
-                  onChange={(event) => setEventEndsAt(event.target.value)}
-                />
-              </div>
-              <select
-                className="mt-2 w-full rounded-lg border border-slate-200 px-2 py-2 text-sm"
-                value={eventFormat}
-                onChange={(event) => setEventFormat(event.target.value as RoundFormat)}
-              >
-                <option value="stroke-play">{t('myStuff.strokePlay')}</option>
-                <option value="stableford">{t('myStuff.stableford')}</option>
-                <option value="match-play">{t('myStuff.matchPlay')}</option>
-                <option value="scramble">{t('myStuff.scramble')}</option>
-              </select>
-              <Button className="mt-2" variant="secondary" onClick={() => void createEvent()} disabled={creatingEvent || !selectedTeamId}>
-                {creatingEvent ? t('myStuff.creatingEvent') : t('myStuff.createEvent')}
+          <Card>
+            <div className="mb-2 flex items-center justify-between">
+              <h3 className="font-semibold">{t('myStuff.dataBackup')}</h3>
+              <Badge>{t('myStuff.offlineSafe')}</Badge>
+            </div>
+            <p className="text-sm text-slate-600">{t('myStuff.dataBackupDesc')}</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button onClick={() => void exportJsonBackup()} disabled={backupBusy}>
+                {backupBusy ? t('common.loading') : t('myStuff.exportBackup')}
               </Button>
+              <Button
+                variant="secondary"
+                onClick={() => backupFileInputRef.current?.click()}
+                disabled={backupBusy}
+              >
+                {t('myStuff.selectBackupFile')}
+              </Button>
+              <input
+                ref={backupFileInputRef}
+                type="file"
+                accept="application/json,.json"
+                className="hidden"
+                onChange={(event) => void onBackupFileSelected(event)}
+              />
             </div>
 
-            <div className="mt-2 space-y-1">
-              {teamEventsLoading ? (
-                <div className="space-y-2">
-                  <div className="h-12 animate-pulse rounded-lg bg-slate-100" />
-                  <div className="h-12 animate-pulse rounded-lg bg-slate-100" />
-                </div>
-              ) : teamEvents.length === 0 ? (
-                <div className="space-y-2">
-                  <p className="text-sm text-slate-500">{t('myStuff.noTeamEvents')}</p>
-                  <Button className="px-3 py-2 text-xs" variant="secondary" onClick={() => onNavigate('/enter-score')}>
-                    {t('myStuff.ctaEnterScore')}
+            {selectedBackupName ? (
+              <p className="mt-2 text-xs text-slate-500">{t('myStuff.selectedFile')}: {selectedBackupName}</p>
+            ) : null}
+
+            {backupError ? (
+              <p className="mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{backupError}</p>
+            ) : null}
+
+            {backupPreview ? (
+              <div className="mt-3 space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{t('myStuff.backupPreview')}</p>
+                <p className="text-sm text-slate-700">
+                  {backupPreview.courses} {t('home.courses')} · {backupPreview.rounds} {t('myStuff.rounds')}
+                </p>
+                <p className="text-xs text-slate-500">
+                  {t('myStuff.exportedAt')}: {new Date(backupPreview.exportedAt).toLocaleString()}
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    variant={importMode === 'merge' ? 'primary' : 'secondary'}
+                    className="py-2"
+                    onClick={() => setImportMode('merge')}
+                  >
+                    {t('myStuff.mergeImport')}
+                  </Button>
+                  <Button
+                    variant={importMode === 'replace' ? 'primary' : 'secondary'}
+                    className="py-2"
+                    onClick={() => setImportMode('replace')}
+                  >
+                    {t('myStuff.replaceImport')}
                   </Button>
                 </div>
-              ) : teamEvents.map((event) => (
-                <div key={event.id} className="rounded-lg border border-slate-200 px-3 py-2 text-sm">
-                  <p className="font-semibold">{event.name}</p>
-                  <p className="text-xs text-slate-500">
-                    {new Date(event.startsAt).toLocaleString()} - {new Date(event.endsAt).toLocaleString()} · {event.format}
-                  </p>
-                </div>
-              ))}
+                <p className="text-xs text-slate-500">
+                  {importMode === 'merge' ? t('myStuff.mergeImportDesc') : t('myStuff.replaceImportDesc')}
+                </p>
+                {backupWarnings.length > 0 ? (
+                  <div className="space-y-1 rounded-lg border border-amber-200 bg-amber-50 p-2">
+                    {backupWarnings.map((warning) => (
+                      <p key={warning} className="text-xs text-amber-800">{warning}</p>
+                    ))}
+                  </div>
+                ) : null}
+                <Button onClick={() => void applyJsonBackupImport()} disabled={backupBusy || !backupPayload}>
+                  {backupBusy ? t('myStuff.importingBackup') : t('myStuff.applyImport')}
+                </Button>
+              </div>
+            ) : null}
+          </Card>
+
+          <Card>
+            <h3 className="font-semibold">{t('myStuff.clubDistanceStats')}</h3>
+            {clubStats.length === 0 ? (
+              <p className="mt-1 text-sm text-slate-500">{t('myStuff.logShotsHint')}</p>
+            ) : (
+              <div className="mt-2 space-y-2">
+                {clubStats.map((entry) => (
+                  <div key={entry.club} className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-sm">
+                    <div>
+                      <p className="font-semibold">{entry.club}</p>
+                      <p className="text-xs text-slate-500">{entry.shots} {t('myStuff.trackedShots')}</p>
+                    </div>
+                    <p className="text-right text-xs text-slate-700">
+                      {t('myStuff.avg')} {Math.round(entry.avg)}m
+                      <br />
+                      {t('myStuff.max')} {Math.round(entry.max)}m
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+
+          <Card>
+            <h3 className="font-semibold">{t('myStuff.teamsEvents')}</h3>
+            <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_auto]">
+              <input
+                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                value={teamName}
+                onChange={(event) => setTeamName(event.target.value)}
+                placeholder={t('myStuff.createTeamName')}
+              />
+              <Button onClick={() => void createTeam()} disabled={creatingTeam}>
+                {creatingTeam ? t('common.creating') : t('myStuff.createTeam')}
+              </Button>
             </div>
-          </>
-        )}
-      </Card>
-
-      <Card>
-        <div className="mb-2 flex items-center justify-between">
-          <h3 className="font-semibold">{t('myStuff.feedbackNotifications')}</h3>
-          <Badge>{unreadReplies.length} {t('myStuff.unread')}</Badge>
-        </div>
-        {feedbackLoading ? (
-          <div className="space-y-2">
-            <div className="h-16 animate-pulse rounded-lg bg-slate-100" />
-            <div className="h-16 animate-pulse rounded-lg bg-slate-100" />
-          </div>
-        ) : feedbackNotifications.length === 0 ? (
-          <div className="space-y-2">
-            <p className="text-sm text-slate-500">{t('myStuff.noAdminReplies')}</p>
-            <Button className="px-3 py-2 text-xs" variant="secondary" onClick={() => onNavigate('/enter-score')}>
-              {t('myStuff.ctaPlayRoundForFeedback')}
-            </Button>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {feedbackNotifications.map((entry) => {
-              const courseName = courses.find((course) => course.id === entry.courseId)?.name ?? entry.courseId;
-              const unread = !entry.userReadAt;
-              return (
-                <div
-                  key={entry.id}
-                  className={`rounded-lg border px-3 py-2 ${unread ? 'border-cyan-300 bg-cyan-50' : 'border-slate-200 bg-white'}`}
+            <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_auto]">
+              <input
+                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                value={inviteCode}
+                onChange={(event) => setInviteCode(event.target.value.toUpperCase())}
+                placeholder={t('myStuff.joinInviteCode')}
+              />
+              <Button variant="secondary" onClick={() => void joinTeam()} disabled={joiningTeam}>
+                {joiningTeam ? t('common.joining') : t('myStuff.joinTeam')}
+              </Button>
+            </div>
+            {teamsLoading ? (
+              <div className="mt-2 space-y-2">
+                <div className="h-10 animate-pulse rounded-xl bg-slate-100" />
+                <div className="h-10 animate-pulse rounded-xl bg-slate-100" />
+              </div>
+            ) : teams.length === 0 ? (
+              <div className="mt-2 space-y-2">
+                <p className="text-sm text-slate-500">{t('myStuff.noTeams')}</p>
+                <Button className="px-3 py-2 text-xs" variant="secondary" onClick={() => onNavigate('/enter-score')}>
+                  {t('myStuff.ctaStartRound')}
+                </Button>
+              </div>
+            ) : (
+              <>
+                <select
+                  className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                  value={selectedTeamId}
+                  onChange={(event) => setSelectedTeamId(event.target.value)}
                 >
-                  <p className="text-sm font-semibold text-slate-900">{courseName}</p>
-                  <p className="mt-1 text-sm text-slate-700">{entry.adminReply}</p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    {entry.adminReplyAt ? new Date(entry.adminReplyAt).toLocaleString() : '-'} · {entry.adminReplyBy || t('myStuff.admin')}
-                  </p>
-                  {unread ? (
-                    <Button
-                      variant="ghost"
-                      className="mt-2 px-2 py-1 text-xs"
-                      onClick={() => void markFeedbackRead(entry.id)}
-                      disabled={markingReadId === entry.id}
-                    >
-                      {markingReadId === entry.id ? t('common.marking') : t('myStuff.markAsRead')}
-                    </Button>
-                  ) : null}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </Card>
+                  {teams.map((team) => (
+                    <option key={team.id} value={team.id}>{team.name} · {t('myStuff.invite')} {team.inviteCode}</option>
+                  ))}
+                </select>
 
-      <Card>
-        <div className="mb-2 flex items-center justify-between">
-          <h3 className="font-semibold">{t('leaderboard.title')}</h3>
-          <Button variant="ghost" className="px-2 py-1 text-xs" onClick={() => onNavigate('/leaderboard')}>{t('buttons.open')}</Button>
-        </div>
-        {myRank ? (
-          <p className="text-sm text-slate-700">
-            {t('myStuff.rankText')} <strong>#<AnimatedNumber value={myRank.position} /></strong> {t('myStuff.bestScoreText')} <strong><AnimatedNumber value={myRank.bestScore} /></strong>.
-          </p>
-        ) : (
-          <p className="text-sm text-slate-500">{t('myStuff.playRoundToRank')}</p>
-        )}
-      </Card>
+                <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{t('myStuff.createEventRound')}</p>
+                  <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                    <input
+                      className="rounded-lg border border-slate-200 px-2 py-2 text-sm"
+                      value={eventName}
+                      onChange={(event) => setEventName(event.target.value)}
+                      placeholder={t('myStuff.eventNamePlaceholder')}
+                    />
+                    <input
+                      type="datetime-local"
+                      className="rounded-lg border border-slate-200 px-2 py-2 text-sm"
+                      value={eventStartsAt}
+                      onChange={(event) => setEventStartsAt(event.target.value)}
+                    />
+                    <input
+                      type="datetime-local"
+                      className="rounded-lg border border-slate-200 px-2 py-2 text-sm"
+                      value={eventEndsAt}
+                      onChange={(event) => setEventEndsAt(event.target.value)}
+                    />
+                  </div>
+                  <select
+                    className="mt-2 w-full rounded-lg border border-slate-200 px-2 py-2 text-sm"
+                    value={eventFormat}
+                    onChange={(event) => setEventFormat(event.target.value as RoundFormat)}
+                  >
+                    <option value="stroke-play">{t('myStuff.strokePlay')}</option>
+                    <option value="stableford">{t('myStuff.stableford')}</option>
+                    <option value="match-play">{t('myStuff.matchPlay')}</option>
+                    <option value="scramble">{t('myStuff.scramble')}</option>
+                  </select>
+                  <Button className="mt-2" variant="secondary" onClick={() => void createEvent()} disabled={creatingEvent || !selectedTeamId}>
+                    {creatingEvent ? t('myStuff.creatingEvent') : t('myStuff.createEvent')}
+                  </Button>
+                </div>
+
+                <div className="mt-2 space-y-1">
+                  {teamEventsLoading ? (
+                    <div className="space-y-2">
+                      <div className="h-12 animate-pulse rounded-lg bg-slate-100" />
+                      <div className="h-12 animate-pulse rounded-lg bg-slate-100" />
+                    </div>
+                  ) : teamEvents.length === 0 ? (
+                    <div className="space-y-2">
+                      <p className="text-sm text-slate-500">{t('myStuff.noTeamEvents')}</p>
+                      <Button className="px-3 py-2 text-xs" variant="secondary" onClick={() => onNavigate('/enter-score')}>
+                        {t('myStuff.ctaEnterScore')}
+                      </Button>
+                    </div>
+                  ) : teamEvents.map((event) => (
+                    <div key={event.id} className="rounded-lg border border-slate-200 px-3 py-2 text-sm">
+                      <p className="font-semibold">{event.name}</p>
+                      <p className="text-xs text-slate-500">
+                        {new Date(event.startsAt).toLocaleString()} - {new Date(event.endsAt).toLocaleString()} · {event.format}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </Card>
+
+          <Card>
+            <div className="mb-2 flex items-center justify-between">
+              <h3 className="font-semibold">{t('myStuff.feedbackNotifications')}</h3>
+              <Badge>{unreadReplies.length} {t('myStuff.unread')}</Badge>
+            </div>
+            {feedbackLoading ? (
+              <div className="space-y-2">
+                <div className="h-16 animate-pulse rounded-lg bg-slate-100" />
+                <div className="h-16 animate-pulse rounded-lg bg-slate-100" />
+              </div>
+            ) : feedbackNotifications.length === 0 ? (
+              <div className="space-y-2">
+                <p className="text-sm text-slate-500">{t('myStuff.noAdminReplies')}</p>
+                <Button className="px-3 py-2 text-xs" variant="secondary" onClick={() => onNavigate('/enter-score')}>
+                  {t('myStuff.ctaPlayRoundForFeedback')}
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {feedbackNotifications.map((entry) => {
+                  const courseName = courses.find((course) => course.id === entry.courseId)?.name ?? entry.courseId;
+                  const unread = !entry.userReadAt;
+                  return (
+                    <div
+                      key={entry.id}
+                      className={`rounded-lg border px-3 py-2 ${unread ? 'border-cyan-300 bg-cyan-50' : 'border-slate-200 bg-white'}`}
+                    >
+                      <p className="text-sm font-semibold text-slate-900">{courseName}</p>
+                      <p className="mt-1 text-sm text-slate-700">{entry.adminReply}</p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        {entry.adminReplyAt ? new Date(entry.adminReplyAt).toLocaleString() : '-'} · {entry.adminReplyBy || t('myStuff.admin')}
+                      </p>
+                      {unread ? (
+                        <Button
+                          variant="ghost"
+                          className="mt-2 px-2 py-1 text-xs"
+                          onClick={() => void markFeedbackRead(entry.id)}
+                          disabled={markingReadId === entry.id}
+                        >
+                          {markingReadId === entry.id ? t('common.marking') : t('myStuff.markAsRead')}
+                        </Button>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </Card>
+
+          <Card>
+            <div className="mb-2 flex items-center justify-between">
+              <h3 className="font-semibold">{t('leaderboard.title')}</h3>
+              <Button variant="ghost" className="px-2 py-1 text-xs" onClick={() => onNavigate('/leaderboard')}>{t('buttons.open')}</Button>
+            </div>
+            {myRank ? (
+              <p className="text-sm text-slate-700">
+                {t('myStuff.rankText')} <strong>#<AnimatedNumber value={myRank.position} /></strong> {t('myStuff.bestScoreText')} <strong><AnimatedNumber value={myRank.bestScore} /></strong>.
+              </p>
+            ) : (
+              <p className="text-sm text-slate-500">{t('myStuff.playRoundToRank')}</p>
+            )}
+          </Card>
+        </>
+      ) : null}
 
       <Card>
         <div className="mb-2 flex items-center justify-between">

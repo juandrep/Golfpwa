@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type TouchEvent } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { stablefordPoints } from '../../domain/stableford';
 import { Button, Card, EmptyState, Input, Modal, Toggle } from '../../ui/components';
 import { useAppStore } from '../../app/store';
 import type { Course, Round, RoundFormat, TeeOption } from '../../domain/types';
@@ -12,6 +11,11 @@ import { trackAppEvent } from '../../app/analytics';
 import { sortTeeOptions } from '../../domain/tee';
 import { haversineMeters } from '../../domain/distance';
 import { weatherCodeToText } from '../../domain/weather';
+import {
+  closeRoundStatusNotification,
+  requestRoundStatusNotificationPermission,
+  showRoundStatusNotification,
+} from '../../app/roundStatusNotification';
 
 const MIN_STROKES = 1;
 const MAX_STROKES = 20;
@@ -137,12 +141,20 @@ export function ScorecardScreen() {
   const [shotClub, setShotClub] = useState('7 Iron');
   const [loggingShot, setLoggingShot] = useState(false);
   const [lastShotDistanceMeters, setLastShotDistanceMeters] = useState<number | null>(null);
+  const [showMoreSheet, setShowMoreSheet] = useState(false);
+  const [showRoundSetupSheet, setShowRoundSetupSheet] = useState(false);
+  const [setupStep, setSetupStep] = useState<1 | 2 | 3>(1);
+  const [showSetupAdvanced, setShowSetupAdvanced] = useState(false);
+  const [showRoundRecapModal, setShowRoundRecapModal] = useState(false);
+  const [recapRound, setRecapRound] = useState<Round | null>(null);
   const swipeStartRef = useRef<{ x: number; y: number; at: number } | null>(null);
   const liveHoleTopRef = useRef<HTMLDivElement | null>(null);
+  const lastRoundNotificationSignatureRef = useRef('');
 
   const startRound = async () => {
     const course = selectedCourse;
     if (!course) return;
+    void requestRoundStatusNotificationPermission();
 
     const teeId = selectedTeeId || suggestTee(course, handicapValue)?.id;
 
@@ -193,6 +205,9 @@ export function ScorecardScreen() {
       },
     });
     setStrokeHistory([]);
+    setShowRoundSetupSheet(false);
+    setShowSetupAdvanced(false);
+    setSetupStep(1);
     showToast(t('score.roundStarted'));
   };
 
@@ -335,13 +350,6 @@ export function ScorecardScreen() {
   };
 
   const total = activeRound?.scores.reduce((sum, score) => sum + score.strokes, 0) ?? 0;
-  const stablefordTotal =
-    activeRound && course
-      ? activeRound.scores.reduce((sum, score) => {
-          const hole = course.holes.find((entry) => entry.number === score.holeNumber);
-          return sum + stablefordPoints(score.strokes, hole?.par ?? 4);
-        }, 0)
-      : 0;
   const roundWindLabel = activeRound?.weather?.windKph !== undefined
     ? `${Math.round(activeRound.weather.windKph)} kph`
     : t('score.notAvailable');
@@ -375,6 +383,8 @@ export function ScorecardScreen() {
     if (state === 'saved_local') return 'border-slate-200 bg-slate-100 text-slate-700';
     return 'border-cyan-200 bg-cyan-50 text-cyan-700';
   };
+  const activeRoundSyncLabel = activeRound ? roundSyncLabel(activeRound) : t('score.syncSavedLocally');
+  const activeRoundSyncTone = activeRound ? roundSyncClass(activeRound) : 'border-slate-200 bg-slate-100 text-slate-700';
 
   const undoLastStroke = async () => {
     if (!activeRound || strokeHistory.length === 0) return;
@@ -479,7 +489,7 @@ export function ScorecardScreen() {
       }
       window.scrollTo({ top: 0, behavior: 'smooth' });
     });
-  }, [activeRound?.id, currentHoleNumber]);
+  }, [activeRound, currentHoleNumber]);
 
   useEffect(() => {
     if (!authUid) {
@@ -556,6 +566,26 @@ export function ScorecardScreen() {
     setFeedbackSuccess(false);
   };
 
+  const openRoundSetup = () => {
+    setSetupStep(1);
+    setShowSetupAdvanced(false);
+    setShowRoundSetupSheet(true);
+  };
+
+  const recapCourse = recapRound ? courses.find((entry) => entry.id === recapRound.courseId) : null;
+  const recapTotal = recapRound
+    ? recapRound.scores.reduce((sum, score) => sum + score.strokes, 0)
+    : 0;
+  const recapParTotal = recapRound && recapCourse
+    ? recapCourse.holes.reduce((sum, hole) => sum + hole.par, 0)
+    : null;
+  const recapBestHole = recapRound
+    ? [...recapRound.scores].sort((a, b) => a.strokes - b.strokes)[0]
+    : null;
+  const recapToughestHole = recapRound
+    ? [...recapRound.scores].sort((a, b) => b.strokes - a.strokes)[0]
+    : null;
+
   useEffect(() => {
     if (!scoreDeltaFx.delta) return;
     const timeout = window.setTimeout(() => {
@@ -564,133 +594,70 @@ export function ScorecardScreen() {
     return () => window.clearTimeout(timeout);
   }, [scoreDeltaFx.delta, scoreDeltaFx.id]);
 
+  useEffect(() => {
+    if (!activeRound || !course || !currentHoleScore) {
+      lastRoundNotificationSignatureRef.current = '';
+      void closeRoundStatusNotification();
+      return;
+    }
+
+    const snapshot = {
+      roundId: activeRound.id,
+      courseName: course.name,
+      holeNumber: currentHoleNumber,
+      holesTotal: course.holes.length,
+      holePar: currentHoleData?.par,
+      holeStrokes: currentHoleScore.strokes,
+      totalStrokes: total,
+    };
+    const nextSignature = JSON.stringify(snapshot);
+    if (nextSignature === lastRoundNotificationSignatureRef.current) return;
+
+    lastRoundNotificationSignatureRef.current = nextSignature;
+    void showRoundStatusNotification(snapshot);
+  }, [
+    activeRound,
+    course,
+    currentHoleData?.par,
+    currentHoleNumber,
+    currentHoleScore,
+    total,
+  ]);
+
   return (
-    <div className={`space-y-3 ${activeRound ? 'pb-28 md:pb-64' : 'pb-24'}`}>
+    <div className={`space-y-3 ${activeRound ? 'pb-44 md:pb-36' : 'pb-24'}`}>
       {!activeRound ? (
         <Card className="space-y-3 border-cyan-200/70 bg-gradient-to-br from-white/90 via-cyan-50/85 to-sky-100/80">
           <h3 className="text-lg font-semibold text-slate-900">{t('home.letsPlay')}</h3>
           <p className="text-sm text-slate-600">{t('home.startRoundDesc')}</p>
-
-          <label className="block text-sm font-medium">{t('score.selectCourse')}</label>
-          <select
-            className="w-full rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-sm"
-            value={selectedCourseId}
-            onChange={(event) => {
-              const nextCourseId = event.target.value;
-              setSelectedCourseId(nextCourseId);
-              const nextCourse = courses.find((entry) => entry.id === nextCourseId);
-              const nextTee = nextCourse ? suggestTee(nextCourse, handicapValue) : undefined;
-              setSelectedTeeId(nextTee?.id ?? '');
-            }}
-          >
-            {courses.map((courseItem) => (
-              <option key={courseItem.id} value={courseItem.id}>{courseItem.name}</option>
-            ))}
-          </select>
-
           <div className="grid grid-cols-2 gap-2">
             <div className="rounded-xl border border-cyan-200 bg-white/90 p-2">
-              <p className="text-xs text-slate-500">{t('score.yourHandicap')}</p>
-              <p className="text-lg font-semibold">{handicapValue}</p>
+              <p className="text-xs text-slate-500">{t('score.selectCourse')}</p>
+              <p className="truncate text-base font-semibold text-slate-900">{selectedCourse?.name ?? t('score.courseFallback')}</p>
             </div>
             <div className="rounded-xl border border-cyan-200 bg-white/90 p-2">
               <p className="text-xs text-slate-500">{t('score.suggestedTee')}</p>
-              <p className="text-lg font-semibold">{suggestedTee?.name ?? t('score.defaultTee')}</p>
+              <p className="text-base font-semibold text-slate-900">{suggestedTee?.name ?? t('score.defaultTee')}</p>
             </div>
           </div>
-
-          <label className="block text-sm font-medium">{t('score.selectTees')}</label>
-          <select
-            className="w-full rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-sm"
-            value={selectedTeeId}
-            onChange={(event) => setSelectedTeeId(event.target.value)}
-          >
-            {orderedSelectedTees.map((tee) => (
-              <option key={tee.id} value={tee.id}>{tee.name}</option>
-            ))}
-          </select>
-
-          <label className="block text-sm font-medium">{t('score.roundFormat')}</label>
-          <select
-            className="w-full rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-sm"
-            value={roundFormat}
-            onChange={(event) => setRoundFormat(event.target.value as RoundFormat)}
-            disabled={Boolean(selectedTeamEventId)}
-          >
-            <option value="stroke-play">{t('score.strokePlay')}</option>
-            <option value="stableford">{t('score.stableford')}</option>
-            <option value="match-play">{t('score.matchPlay')}</option>
-            <option value="scramble">{t('score.scramble')}</option>
-          </select>
-
-          {authUid ? (
-            <>
-              <label className="block text-sm font-medium">{t('score.teamOptional')}</label>
-              <select
-                className="w-full rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-sm"
-                value={selectedTeamId}
-                onChange={(event) => setSelectedTeamId(event.target.value)}
-              >
-                <option value="">{t('score.noTeam')}</option>
-                {myTeams.map((team) => (
-                  <option key={team.id} value={team.id}>{team.name}</option>
-                ))}
-              </select>
-
-              <label className="block text-sm font-medium">{t('score.eventOptional')}</label>
-              <select
-                className="w-full rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-sm"
-                value={selectedTeamEventId}
-                onChange={(event) => setSelectedTeamEventId(event.target.value)}
-                disabled={!selectedTeamId}
-              >
-                <option value="">{selectedTeamId ? t('score.noEvent') : t('score.selectTeamFirst')}</option>
-                {teamEvents.map((event) => (
-                  <option key={event.id} value={event.id} disabled={!isEventJoinOpen(event)}>
-                    {event.name} ({event.format}){isEventJoinOpen(event) ? '' : ` · ${t('score.closed')}`}
-                  </option>
-                ))}
-              </select>
-              {selectedTeamId && openTeamEvents.length === 0 ? (
-                <p className="text-xs text-slate-500">{t('score.noOpenEvents')}</p>
-              ) : null}
-            </>
-          ) : null}
-
-          <div className="rounded-xl border border-cyan-200 bg-white/90 p-2">
-            <div className="flex items-center justify-between gap-2">
-              <div>
-                <p className="text-xs text-slate-500">{t('score.weatherContext')}</p>
-                <p className="text-sm font-semibold">
-                  {contextWeather
-                    ? `${contextWeather.temperatureC ?? '-'}°C · ${contextWeather.windKph ?? '-'} kph · ${contextWeather.condition ?? '-'}`
-                    : t('score.notCaptured')}
-                </p>
-              </div>
-              <Button variant="secondary" className="px-2 py-1 text-xs" onClick={refreshRoundWeather} disabled={loadingWeather}>
-                {loadingWeather ? t('common.loading') : t('score.capture')}
-              </Button>
-            </div>
-          </div>
-
-          <Button onClick={startRound} disabled={courses.length === 0}>{t('score.startRoundNow')}</Button>
+          <Button onClick={openRoundSetup} disabled={courses.length === 0}>
+            {t('score.startRoundNow')}
+          </Button>
         </Card>
       ) : null}
 
-      {!activeRound || !course || !currentHoleData || !currentHoleScore ? (
+      {activeRound && (!course || !currentHoleData || !currentHoleScore) ? (
         <EmptyState title={t('empty.noRounds')} desc={t('score.title')} />
-      ) : (
+      ) : null}
+
+      {activeRound && course && currentHoleData && currentHoleScore ? (
         <>
           <div ref={liveHoleTopRef} />
           <div key={`live-hole-${currentHoleNumber}`} className="hole-fade-in">
             <LiveHolePanel hole={currentHoleData} teeOption={activeTeeOption} />
           </div>
 
-          <div
-            onTouchStart={handleHoleSwipeStart}
-            onTouchEnd={handleHoleSwipeEnd}
-            className="md:hidden"
-          >
+          <div onTouchStart={handleHoleSwipeStart} onTouchEnd={handleHoleSwipeEnd}>
             <Card className="space-y-2 border-cyan-200 bg-cyan-50/80 py-2 shadow-md">
               <div className="flex items-center justify-between">
                 <div>
@@ -720,51 +687,8 @@ export function ScorecardScreen() {
                   <p className="text-base font-semibold text-slate-900">{currentHoleNumber}/{course.holes.length}</p>
                 </div>
               </div>
-              <div className="flex items-end justify-between pt-0.5">
-                <div>
-                  <p className="text-xs text-slate-700">{t('score.totalScore')}</p>
-                  <p className="text-xl font-semibold text-slate-900">{total}</p>
-                </div>
-                {activeRound.stablefordEnabled ? (
-                  <p className="text-xs text-cyan-900">{t('score.stableford')}: <strong>{stablefordTotal}</strong></p>
-                ) : null}
-              </div>
             </Card>
           </div>
-
-          <Card className="flex items-center justify-between">
-            <div>
-              <p className="text-xs uppercase tracking-wide text-slate-500">{t('score.scoringMode')}</p>
-              <span className="font-semibold">{t('score.stableford')}</span>
-            </div>
-            <Toggle checked={activeRound.stablefordEnabled} onChange={toggleStableford} />
-          </Card>
-
-          <Card className="space-y-2 border-cyan-200/70 bg-gradient-to-br from-white to-cyan-50/70">
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-cyan-700">{t('score.holeContext')}</p>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
-              <div className="rounded-lg border border-slate-200 bg-white px-2 py-1.5">
-                <p className="text-[10px] uppercase tracking-wide text-slate-500">{t('courseMap.par')}</p>
-                <p className="text-base font-semibold text-slate-900">{currentHoleData.par}</p>
-              </div>
-              <div className="rounded-lg border border-slate-200 bg-white px-2 py-1.5">
-                <p className="text-[10px] uppercase tracking-wide text-slate-500">{t('score.strokeIndex')}</p>
-                <p className="text-base font-semibold text-slate-900">{currentHoleData.strokeIndex ?? '-'}</p>
-              </div>
-              <div className="rounded-lg border border-slate-200 bg-white px-2 py-1.5">
-                <p className="text-[10px] uppercase tracking-wide text-slate-500">{t('courseMap.yardage')}</p>
-                <p className="text-base font-semibold text-slate-900">{currentHoleData.lengthYards ?? '-'}</p>
-              </div>
-              <div className="rounded-lg border border-slate-200 bg-white px-2 py-1.5">
-                <p className="text-[10px] uppercase tracking-wide text-slate-500">{t('score.wind')}</p>
-                <p className="text-base font-semibold text-slate-900">{roundWindLabel}</p>
-              </div>
-              <div className="rounded-lg border border-slate-200 bg-white px-2 py-1.5">
-                <p className="text-[10px] uppercase tracking-wide text-slate-500">{t('score.recommendedClub')}</p>
-                <p className="text-base font-semibold text-slate-900">{holeClubTip}</p>
-              </div>
-            </div>
-          </Card>
 
           <Card className="flex items-center gap-2.5 sm:gap-3">
             <div className="w-[92px] shrink-0">
@@ -823,93 +747,12 @@ export function ScorecardScreen() {
             </button>
           </Card>
 
-          <Card className="space-y-2">
-            <p className="text-xs uppercase tracking-wide text-slate-500">{t('score.quickActions')}</p>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              <Button variant="secondary" onClick={() => void undoLastStroke()} disabled={strokeHistory.length === 0}>
-                {t('score.undoLastStroke')}
-              </Button>
-              <Button variant="secondary" onClick={() => setShowShotHistory(true)} disabled={strokeHistory.length === 0}>
-                {t('score.shotHistory')}
-              </Button>
-              <Button variant="secondary" onClick={() => void updateHole(currentHoleNumber, currentHoleData.par)}>
-                {t('score.setPar')}
-              </Button>
-              <Button variant="secondary" onClick={() => void updateHole(currentHoleNumber, currentHoleData.par + 1)}>
-                {t('score.setBogey')}
-              </Button>
-            </div>
-          </Card>
-
-          <Card className="space-y-2">
-            <p className="text-xs uppercase tracking-wide text-slate-500">{t('score.gpsShotTracking')}</p>
-            <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
-              <Input
-                value={shotClub}
-                onChange={(event) => setShotClub(event.target.value)}
-                placeholder={t('score.clubPlaceholder')}
-              />
-              <Button onClick={() => void logGpsShot()} disabled={loggingShot}>
-                {loggingShot ? t('score.logging') : t('score.logShot')}
-              </Button>
-            </div>
-            <p className="text-xs text-slate-600">
-              {t('score.holeShotsLogged')}: {(activeRound.shots ?? []).filter((shot) => shot.holeNumber === currentHoleNumber).length}
-              {lastShotDistanceMeters ? ` · ${t('score.lastSegment')} ${Math.round(lastShotDistanceMeters)}m` : ''}
-            </p>
-          </Card>
-
-          <div
-            onTouchStart={handleHoleSwipeStart}
-            onTouchEnd={handleHoleSwipeEnd}
-            className="pointer-events-none fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+4.2rem)] z-30 hidden px-3 sm:px-6 md:bottom-4 md:block"
-          >
-            <Card className="pointer-events-auto mx-auto max-w-6xl space-y-2 border-cyan-200 bg-cyan-50/90 py-2 shadow-lg backdrop-blur">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-[9px] uppercase tracking-[0.18em] text-cyan-700">{t('score.holeHeader')}</p>
-                  <h3 className="text-lg font-semibold leading-tight text-slate-900">{t('score.hole')} {currentHoleNumber}</h3>
-                </div>
-                <div className="flex gap-1.5">
-                  <Button variant="secondary" className="px-2 py-1 text-xs" onClick={() => void goHole(-1)}>{t('score.prev')}</Button>
-                  <Button variant="secondary" className="px-2 py-1 text-xs" onClick={() => void goHole(1)}>{t('score.next')}</Button>
-                </div>
-              </div>
-              <div className="grid grid-cols-4 gap-1.5 text-center">
-                <div className="rounded-md bg-white px-1.5 py-1">
-                  <p className="text-[9px] uppercase tracking-wide text-slate-500">{t('courseMap.par')}</p>
-                  <p className="text-base font-semibold text-slate-900">{currentHoleData.par}</p>
-                </div>
-                <div className="rounded-md bg-white px-1.5 py-1">
-                  <p className="text-[9px] uppercase tracking-wide text-slate-500">SI</p>
-                  <p className="text-base font-semibold text-slate-900">{currentHoleData.strokeIndex ?? '-'}</p>
-                </div>
-                <div className="rounded-md bg-white px-1.5 py-1">
-                  <p className="text-[9px] uppercase tracking-wide text-slate-500">{t('courseMap.yardage')}</p>
-                  <p className="text-base font-semibold text-slate-900">{currentHoleData.lengthYards ?? '-'}</p>
-                </div>
-                <div className="rounded-md bg-white px-1.5 py-1">
-                  <p className="text-[9px] uppercase tracking-wide text-slate-500">{t('score.roundLabel')}</p>
-                  <p className="text-base font-semibold text-slate-900">{currentHoleNumber}/{course.holes.length}</p>
-                </div>
-              </div>
-              <div className="flex items-end justify-between pt-0.5">
-                <div>
-                  <p className="text-xs text-slate-700">{t('score.totalScore')}</p>
-                  <p className="text-xl font-semibold text-slate-900">{total}</p>
-                </div>
-                {activeRound.stablefordEnabled ? (
-                  <p className="text-xs text-cyan-900">{t('score.stableford')}: <strong>{stablefordTotal}</strong></p>
-                ) : null}
-              </div>
-            </Card>
-          </div>
-
           <div className="grid grid-cols-2 gap-2">
             <Button
               onClick={async () => {
                 const justCompletedRound = activeRound;
                 await completeRound(activeRound);
+                void closeRoundStatusNotification();
                 triggerHaptic();
                 void trackAppEvent({
                   eventName: 'round_finished',
@@ -922,12 +765,12 @@ export function ScorecardScreen() {
                     totalStrokes: justCompletedRound.scores.reduce((sum, item) => sum + item.strokes, 0),
                   },
                 });
+                setRecapRound(justCompletedRound);
                 setFeedbackRoundMeta({
                   roundId: justCompletedRound.id,
                   courseId: justCompletedRound.courseId,
                 });
-                setFeedbackSuccess(false);
-                setShowFeedbackModal(true);
+                setShowRoundRecapModal(true);
                 showToast(t('toast.scoreSaved'));
               }}
             >
@@ -937,14 +780,41 @@ export function ScorecardScreen() {
               variant="secondary"
               onClick={async () => {
                 await deleteRound(activeRound.id);
+                void closeRoundStatusNotification();
                 showToast(t('score.roundDeleted'));
               }}
             >
               {t('score.deleteRound')}
             </Button>
           </div>
+
+          <div
+            className="pointer-events-none fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+4.2rem)] z-30 px-3 sm:px-6 md:bottom-4"
+            onTouchStart={handleHoleSwipeStart}
+            onTouchEnd={handleHoleSwipeEnd}
+          >
+            <div className="pointer-events-auto mx-auto max-w-6xl rounded-2xl border border-cyan-200 bg-white/95 px-3 py-2 shadow-[0_14px_34px_rgba(15,23,42,0.18)] backdrop-blur">
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-[10px] uppercase tracking-[0.12em] text-slate-500">{t('score.hole')} {currentHoleNumber}/{course.holes.length}</p>
+                  <p className="text-sm font-semibold text-slate-900">{t('score.totalScore')}: {total}</p>
+                </div>
+                <span className={`hidden rounded-full border px-2 py-0.5 text-[11px] font-semibold sm:inline-flex ${activeRoundSyncTone}`}>
+                  {activeRoundSyncLabel}
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <Button variant="secondary" className="px-2 py-1 text-xs" onClick={() => setShowMoreSheet(true)}>
+                    {t('score.quickActions')}
+                  </Button>
+                  <Button className="px-2 py-1 text-xs" onClick={() => void goHole(1)}>
+                    {t('score.next')}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
         </>
-      )}
+      ) : null}
 
       <Card>
         <h3 className="text-base font-semibold">{t('score.roundList')}</h3>
@@ -998,65 +868,292 @@ export function ScorecardScreen() {
         )}
       </Modal>
 
-      <AnimatePresence>
-        {showFeedbackModal ? (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-[2px]"
-            onClick={closeFeedbackSheet}
-          >
-            <motion.div
-              initial={{ y: 24, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: 18, opacity: 0 }}
-              transition={{ duration: 0.2, ease: 'easeOut' }}
-              className="absolute inset-x-0 bottom-0 rounded-t-3xl border border-slate-200/80 bg-white p-4 shadow-[0_-16px_42px_rgba(2,6,23,0.45)] sm:inset-auto sm:left-1/2 sm:top-1/2 sm:w-full sm:max-w-md sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl"
-              onClick={(event) => event.stopPropagation()}
-            >
-              <div className="mb-2 flex items-center justify-between">
-                <h3 className="text-base font-semibold text-slate-900">{t('feedback.title')}</h3>
-                <button onClick={closeFeedbackSheet} className="text-sm text-slate-500">{t('buttons.close')}</button>
+      <Modal open={showRoundSetupSheet} onClose={() => setShowRoundSetupSheet(false)} title={t('score.startRoundNow')}>
+        <div className="space-y-3">
+          <div className="grid grid-cols-3 gap-2">
+            {[1, 2, 3].map((step) => (
+              <div
+                key={step}
+                className={`rounded-lg px-2 py-1 text-center text-xs font-semibold ${setupStep === step ? 'bg-gradient-to-r from-cyan-500 to-sky-500 text-white' : 'bg-slate-100 text-slate-500'}`}
+              >
+                {t('onboarding.step')} {step}
               </div>
+            ))}
+          </div>
 
-              {feedbackSuccess ? (
-                <div className="rounded-2xl border border-cyan-200 bg-cyan-50 px-3 py-4 text-center">
-                  <p className="text-sm font-semibold text-cyan-900">{t('feedback.sentTitle')}</p>
-                  <p className="mt-1 text-sm text-cyan-800">{t('feedback.thanks')}</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  <p className="text-sm font-medium text-slate-800">{t('feedback.description')}</p>
-                  <div className="grid grid-cols-5 gap-1">
-                    {[1, 2, 3, 4, 5].map((value) => (
-                      <button
-                        key={value}
-                        type="button"
-                        className={`rounded-lg border px-2 py-2 text-sm font-semibold transition ${feedbackRating === value ? 'border-cyan-500 bg-gradient-to-r from-cyan-500 to-sky-500 text-white shadow-[0_8px_18px_rgba(14,165,233,0.32)]' : 'border-slate-300 bg-white text-slate-800 hover:bg-slate-50'}`}
-                        onClick={() => setFeedbackRating(value)}
+          {setupStep === 1 ? (
+            <div className="space-y-2">
+              <label className="block text-sm font-medium">{t('score.selectCourse')}</label>
+              <select
+                className="w-full rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-sm"
+                value={selectedCourseId}
+                onChange={(event) => {
+                  const nextCourseId = event.target.value;
+                  setSelectedCourseId(nextCourseId);
+                  const nextCourse = courses.find((entry) => entry.id === nextCourseId);
+                  const nextTee = nextCourse ? suggestTee(nextCourse, handicapValue) : undefined;
+                  setSelectedTeeId(nextTee?.id ?? '');
+                }}
+              >
+                {courses.map((courseItem) => (
+                  <option key={courseItem.id} value={courseItem.id}>{courseItem.name}</option>
+                ))}
+              </select>
+
+              <label className="block text-sm font-medium">{t('score.selectTees')}</label>
+              <select
+                className="w-full rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-sm"
+                value={selectedTeeId}
+                onChange={(event) => setSelectedTeeId(event.target.value)}
+              >
+                {orderedSelectedTees.map((tee) => (
+                  <option key={tee.id} value={tee.id}>{tee.name}</option>
+                ))}
+              </select>
+            </div>
+          ) : null}
+
+          {setupStep === 2 ? (
+            <div className="space-y-2">
+              <label className="block text-sm font-medium">{t('score.roundFormat')}</label>
+              <select
+                className="w-full rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-sm"
+                value={roundFormat}
+                onChange={(event) => setRoundFormat(event.target.value as RoundFormat)}
+                disabled={Boolean(selectedTeamEventId)}
+              >
+                <option value="stroke-play">{t('score.strokePlay')}</option>
+                <option value="stableford">{t('score.stableford')}</option>
+                <option value="match-play">{t('score.matchPlay')}</option>
+                <option value="scramble">{t('score.scramble')}</option>
+              </select>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
+                <p>{t('score.yourHandicap')}: <strong>{handicapValue}</strong></p>
+                <p>{t('score.suggestedTee')}: <strong>{suggestedTee?.name ?? t('score.defaultTee')}</strong></p>
+              </div>
+            </div>
+          ) : null}
+
+          {setupStep === 3 ? (
+            <div className="space-y-2">
+              <Button
+                variant="secondary"
+                className="w-full"
+                onClick={() => setShowSetupAdvanced((previous) => !previous)}
+              >
+                {showSetupAdvanced ? t('buttons.close') : t('score.quickActions')}
+              </Button>
+
+              {showSetupAdvanced ? (
+                <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  {authUid ? (
+                    <>
+                      <label className="block text-sm font-medium">{t('score.teamOptional')}</label>
+                      <select
+                        className="w-full rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-sm"
+                        value={selectedTeamId}
+                        onChange={(event) => setSelectedTeamId(event.target.value)}
                       >
-                        {value}
-                      </button>
-                    ))}
+                        <option value="">{t('score.noTeam')}</option>
+                        {myTeams.map((team) => (
+                          <option key={team.id} value={team.id}>{team.name}</option>
+                        ))}
+                      </select>
+
+                      <label className="block text-sm font-medium">{t('score.eventOptional')}</label>
+                      <select
+                        className="w-full rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-sm"
+                        value={selectedTeamEventId}
+                        onChange={(event) => setSelectedTeamEventId(event.target.value)}
+                        disabled={!selectedTeamId}
+                      >
+                        <option value="">{selectedTeamId ? t('score.noEvent') : t('score.selectTeamFirst')}</option>
+                        {teamEvents.map((event) => (
+                          <option key={event.id} value={event.id} disabled={!isEventJoinOpen(event)}>
+                            {event.name} ({event.format}){isEventJoinOpen(event) ? '' : ` · ${t('score.closed')}`}
+                          </option>
+                        ))}
+                      </select>
+                      {selectedTeamId && openTeamEvents.length === 0 ? (
+                        <p className="text-xs text-slate-500">{t('score.noOpenEvents')}</p>
+                      ) : null}
+                    </>
+                  ) : null}
+
+                  <div className="rounded-xl border border-cyan-200 bg-white/90 p-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <p className="text-xs text-slate-500">{t('score.weatherContext')}</p>
+                        <p className="text-sm font-semibold">
+                          {contextWeather
+                            ? `${contextWeather.temperatureC ?? '-'}°C · ${contextWeather.windKph ?? '-'} kph · ${contextWeather.condition ?? '-'}`
+                            : t('score.notCaptured')}
+                        </p>
+                      </div>
+                      <Button variant="secondary" className="px-2 py-1 text-xs" onClick={refreshRoundWeather} disabled={loadingWeather}>
+                        {loadingWeather ? t('common.loading') : t('score.capture')}
+                      </Button>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-700">{t('feedback.noteOptional')}</p>
-                    <Input
-                      value={feedbackNote}
-                      onChange={(event) => setFeedbackNote(event.target.value)}
-                      placeholder={t('feedback.placeholder')}
-                    />
-                  </div>
-                  <Button onClick={() => void submitRoundFeedback()} disabled={feedbackSending}>
-                    {feedbackSending ? t('feedback.sending') : t('feedback.send')}
-                  </Button>
                 </div>
-              )}
-            </motion.div>
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
+              ) : null}
+            </div>
+          ) : null}
+
+          <div className="flex gap-2">
+            {setupStep > 1 ? (
+              <Button variant="secondary" className="flex-1" onClick={() => setSetupStep((previous) => (previous - 1) as 1 | 2 | 3)}>
+                {t('onboarding.back')}
+              </Button>
+            ) : null}
+            {setupStep < 3 ? (
+              <Button className="flex-1" onClick={() => setSetupStep((previous) => (previous + 1) as 1 | 2 | 3)}>
+                {t('onboarding.next')}
+              </Button>
+            ) : (
+              <Button className="flex-1" onClick={() => void startRound()} disabled={courses.length === 0}>
+                {t('score.startRoundNow')}
+              </Button>
+            )}
+          </div>
+        </div>
+      </Modal>
+
+      <Modal open={showMoreSheet} onClose={() => setShowMoreSheet(false)} title={t('score.quickActions')}>
+        {activeRound && course && currentHoleData ? (
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-2">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                <p className="text-[10px] uppercase tracking-wide text-slate-500">{t('score.wind')}</p>
+                <p className="text-sm font-semibold text-slate-900">{roundWindLabel}</p>
+              </div>
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                <p className="text-[10px] uppercase tracking-wide text-slate-500">{t('score.recommendedClub')}</p>
+                <p className="text-sm font-semibold text-slate-900">{holeClubTip}</p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+              <div>
+                <p className="text-xs uppercase tracking-wide text-slate-500">{t('score.scoringMode')}</p>
+                <p className="text-sm font-semibold text-slate-900">{t('score.stableford')}</p>
+              </div>
+              <Toggle checked={activeRound.stablefordEnabled} onChange={toggleStableford} />
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <Button variant="secondary" onClick={() => void undoLastStroke()} disabled={strokeHistory.length === 0}>
+                {t('score.undoLastStroke')}
+              </Button>
+              <Button variant="secondary" onClick={() => setShowShotHistory(true)} disabled={strokeHistory.length === 0}>
+                {t('score.shotHistory')}
+              </Button>
+              <Button variant="secondary" onClick={() => void updateHole(currentHoleNumber, currentHoleData.par)}>
+                {t('score.setPar')}
+              </Button>
+              <Button variant="secondary" onClick={() => void updateHole(currentHoleNumber, currentHoleData.par + 1)}>
+                {t('score.setBogey')}
+              </Button>
+            </div>
+
+            <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <p className="text-xs uppercase tracking-wide text-slate-500">{t('score.gpsShotTracking')}</p>
+              <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+                <Input
+                  value={shotClub}
+                  onChange={(event) => setShotClub(event.target.value)}
+                  placeholder={t('score.clubPlaceholder')}
+                />
+                <Button onClick={() => void logGpsShot()} disabled={loggingShot}>
+                  {loggingShot ? t('score.logging') : t('score.logShot')}
+                </Button>
+              </div>
+              <p className="text-xs text-slate-600">
+                {t('score.holeShotsLogged')}: {(activeRound.shots ?? []).filter((shot) => shot.holeNumber === currentHoleNumber).length}
+                {lastShotDistanceMeters ? ` · ${t('score.lastSegment')} ${Math.round(lastShotDistanceMeters)}m` : ''}
+              </p>
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm text-slate-500">{t('empty.noRounds')}</p>
+        )}
+      </Modal>
+
+      <Modal open={showRoundRecapModal} onClose={() => setShowRoundRecapModal(false)} title={t('score.finishRound')}>
+        {recapRound ? (
+          <div className="space-y-3">
+            <div className="rounded-xl border border-cyan-200 bg-cyan-50 p-3">
+              <p className="text-xs uppercase tracking-[0.14em] text-cyan-700">{recapCourse?.name ?? t('score.courseFallback')}</p>
+              <p className="text-2xl font-semibold text-slate-900">{recapTotal}</p>
+              <p className="text-sm text-slate-700">
+                {recapParTotal !== null ? `${t('courseMap.par')} ${recapParTotal} · ${recapTotal - recapParTotal >= 0 ? '+' : ''}${recapTotal - recapParTotal}` : t('score.totalScore')}
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              <div className="rounded-lg border border-slate-200 px-3 py-2">
+                <p className="text-xs text-slate-500">{t('score.setPar')}</p>
+                <p className="font-semibold">{recapBestHole ? `${t('score.hole')} ${recapBestHole.holeNumber} · ${recapBestHole.strokes}` : '-'}</p>
+              </div>
+              <div className="rounded-lg border border-slate-200 px-3 py-2">
+                <p className="text-xs text-slate-500">{t('score.setBogey')}</p>
+                <p className="font-semibold">{recapToughestHole ? `${t('score.hole')} ${recapToughestHole.holeNumber} · ${recapToughestHole.strokes}` : '-'}</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setShowRoundRecapModal(false);
+                  setShowFeedbackModal(true);
+                }}
+              >
+                {t('feedback.send')}
+              </Button>
+              <Button onClick={() => setShowRoundRecapModal(false)}>
+                {t('buttons.close')}
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm text-slate-500">{t('empty.noRounds')}</p>
+        )}
+      </Modal>
+
+      <Modal open={showFeedbackModal} onClose={closeFeedbackSheet} title={t('feedback.title')}>
+        {feedbackSuccess ? (
+          <div className="rounded-2xl border border-cyan-200 bg-cyan-50 px-3 py-4 text-center">
+            <p className="text-sm font-semibold text-cyan-900">{t('feedback.sentTitle')}</p>
+            <p className="mt-1 text-sm text-cyan-800">{t('feedback.thanks')}</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-sm font-medium text-slate-800">{t('feedback.description')}</p>
+            <div className="grid grid-cols-5 gap-1">
+              {[1, 2, 3, 4, 5].map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  className={`rounded-lg border px-2 py-2 text-sm font-semibold transition ${feedbackRating === value ? 'border-cyan-500 bg-gradient-to-r from-cyan-500 to-sky-500 text-white shadow-[0_8px_18px_rgba(14,165,233,0.32)]' : 'border-slate-300 bg-white text-slate-800 hover:bg-slate-50'}`}
+                  onClick={() => setFeedbackRating(value)}
+                >
+                  {value}
+                </button>
+              ))}
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-700">{t('feedback.noteOptional')}</p>
+              <Input
+                value={feedbackNote}
+                onChange={(event) => setFeedbackNote(event.target.value)}
+                placeholder={t('feedback.placeholder')}
+              />
+            </div>
+            <Button onClick={() => void submitRoundFeedback()} disabled={feedbackSending}>
+              {feedbackSending ? t('feedback.sending') : t('feedback.send')}
+            </Button>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

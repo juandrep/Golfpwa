@@ -1,7 +1,7 @@
 import { Suspense, lazy, useEffect, useState, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAppStore } from './store';
-import { AnimatedNumber, Button, Card } from '../ui/components';
+import { Button, Card } from '../ui/components';
 import { I18nProvider, useI18n } from './i18n';
 import { ToastProvider } from './toast';
 import { AuthProvider, useAuth } from './auth';
@@ -104,7 +104,6 @@ function AppShell() {
   const {
     loading,
     init,
-    rounds,
     activeRound,
     courses,
     profile,
@@ -204,41 +203,33 @@ function AppShell() {
 
     return (
       <div className="space-y-3">
-        <Card className="overflow-hidden border-cyan-300/30 bg-gradient-to-br from-slate-900 via-cyan-900 to-sky-800 text-white shadow-[0_20px_44px_rgba(15,23,42,0.28)]">
+        <Card className="border-cyan-300/30 bg-gradient-to-br from-slate-900 via-cyan-900 to-sky-800 text-white shadow-[0_20px_44px_rgba(15,23,42,0.28)]">
           <p className="text-xs uppercase tracking-[0.16em] text-cyan-100/90">{t('home.mainMenu')}</p>
           <h2 className="mt-1 text-2xl font-semibold leading-tight">{t('home.welcome')}, {profile?.displayName ?? user.email?.split('@')[0]}</h2>
           <p className="mt-1 text-sm text-cyan-100/90">{t('home.pickFlow')}</p>
-          <div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs">
-            <div className="rounded-xl border border-white/15 bg-white/10 px-2 py-2.5 backdrop-blur-sm">
-              <p className="text-[11px] uppercase tracking-wide text-cyan-100/90">{t('home.rounds')}</p>
-              <p className="text-lg font-semibold text-white"><AnimatedNumber value={rounds.length} /></p>
-            </div>
-            <div className="rounded-xl border border-white/15 bg-white/10 px-2 py-2.5 backdrop-blur-sm">
-              <p className="text-[11px] uppercase tracking-wide text-cyan-100/90">{t('home.active')}</p>
-              <p className="text-lg font-semibold text-white"><AnimatedNumber value={activeRound ? 1 : 0} /></p>
-            </div>
-            <div className="rounded-xl border border-white/15 bg-white/10 px-2 py-2.5 backdrop-blur-sm">
-              <p className="text-[11px] uppercase tracking-wide text-cyan-100/90">{t('home.courses')}</p>
-              <p className="text-lg font-semibold text-white"><AnimatedNumber value={courses.length} /></p>
-            </div>
-          </div>
         </Card>
 
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Card className="border-sky-300/30 bg-gradient-to-br from-sky-700 via-cyan-700 to-teal-700 text-white">
-            <p className="text-xs uppercase tracking-wide text-cyan-100/95">{t('nav.myStuff')}</p>
-            <h3 className="mt-1 text-lg font-semibold">{t('home.myStuffTitle')}</h3>
-            <p className="mt-1 text-sm text-cyan-100/90">{t('home.myStuffDesc')}</p>
-            <Button className="mt-4 border-white/70 bg-white/90 text-slate-900 hover:bg-white" variant="secondary" onClick={() => navigate('/my-stuff')}>{t('home.openMyStuff')}</Button>
-          </Card>
+        <Card className={`border ${activeRound ? 'border-cyan-200 bg-cyan-50/85' : 'border-slate-200 bg-slate-50/75'}`}>
+          <p className="text-xs uppercase tracking-wide text-slate-500">{t('score.activeRound')}</p>
+          <h3 className="mt-1 text-lg font-semibold text-slate-900">
+            {activeRound
+              ? `${courses.find((course) => course.id === activeRound.courseId)?.name ?? t('score.courseFallback')} · ${t('score.hole')} ${activeRound.currentHoleNumber ?? 1}`
+              : t('empty.noRounds')}
+          </h3>
+          <Button className="mt-3 w-full" onClick={() => navigate('/enter-score')}>
+            {activeRound ? t('score.resumeRound') : t('home.startPlaying')}
+          </Button>
+        </Card>
 
-          <Card className="border-cyan-200/70 bg-gradient-to-br from-white/90 via-cyan-50/85 to-sky-100/80">
-            <p className="text-xs uppercase tracking-wide text-cyan-700">{t('home.letsPlay')}</p>
-            <h3 className="mt-1 text-lg font-semibold text-slate-900">{t('home.startRoundFlow')}</h3>
-            <p className="mt-1 text-sm text-slate-600">{t('home.startRoundDesc')}</p>
-            <Button className="mt-4" onClick={() => navigate('/enter-score')}>{t('home.startPlaying')}</Button>
-          </Card>
-        </div>
+        <Card className="border-cyan-200/70 bg-gradient-to-br from-white/90 via-cyan-50/85 to-sky-100/80">
+          <p className="text-xs uppercase tracking-wide text-cyan-700">{t('home.letsPlay')}</p>
+          <h3 className="mt-1 text-lg font-semibold text-slate-900">{t('home.startRoundFlow')}</h3>
+          <p className="mt-1 text-sm text-slate-600">{t('home.startRoundDesc')}</p>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <Button onClick={() => navigate('/enter-score')}>{t('home.startPlaying')}</Button>
+            <Button variant="secondary" onClick={() => navigate('/my-stuff')}>{t('home.openMyStuff')}</Button>
+          </div>
+        </Card>
       </div>
     );
   })();

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import type { Course, CourseQaReport, HazardZone, Hole, HoleAreas, LatLng, TeeOption } from '../../domain/types';
@@ -211,7 +211,7 @@ export function AdminPanelScreen() {
     setSelectedTeeId(sortTeeOptions(nextDraft.tees)[0]?.id ?? '');
     setNewTeeName('');
     setHoleNumber(1);
-  }, [selectedCourse?.id]);
+  }, [selectedCourse]);
 
   const currentHole = useMemo(
     () => getHoleByNumber(draftCourse, holeNumber),
@@ -243,7 +243,7 @@ export function AdminPanelScreen() {
     }
   }, [draftCourse, orderedDraftTees, selectedTeeId]);
 
-  const refreshPendingMembers = async () => {
+  const refreshPendingMembers = useCallback(async () => {
     if (!adminEmail) return;
     setMembersLoading(true);
     try {
@@ -254,9 +254,9 @@ export function AdminPanelScreen() {
     } finally {
       setMembersLoading(false);
     }
-  };
+  }, [adminEmail, showToast, t]);
 
-  const refreshCourseAuditLogs = async (courseId: string) => {
+  const refreshCourseAuditLogs = useCallback(async (courseId: string) => {
     if (!adminEmail || !courseId) return;
     setAuditLoading(true);
     try {
@@ -267,9 +267,9 @@ export function AdminPanelScreen() {
     } finally {
       setAuditLoading(false);
     }
-  };
+  }, [adminEmail, showToast, t]);
 
-  const refreshRoundFeedback = async (courseId = feedbackCourseFilter) => {
+  const refreshRoundFeedback = useCallback(async (courseId = feedbackCourseFilter) => {
     if (!adminEmail) return;
     setFeedbackLoading(true);
     try {
@@ -289,7 +289,7 @@ export function AdminPanelScreen() {
     } finally {
       setFeedbackLoading(false);
     }
-  };
+  }, [adminEmail, feedbackCourseFilter, showToast, t]);
 
   const replyToRoundFeedback = async (feedbackId: string) => {
     if (!adminEmail) return;
@@ -325,7 +325,7 @@ export function AdminPanelScreen() {
 
   useEffect(() => {
     void refreshPendingMembers();
-  }, [adminEmail]);
+  }, [refreshPendingMembers]);
 
   useEffect(() => {
     if (!selectedCourseId) {
@@ -333,11 +333,11 @@ export function AdminPanelScreen() {
       return;
     }
     void refreshCourseAuditLogs(selectedCourseId);
-  }, [adminEmail, selectedCourseId]);
+  }, [refreshCourseAuditLogs, selectedCourseId]);
 
   useEffect(() => {
     void refreshRoundFeedback(feedbackCourseFilter);
-  }, [adminEmail, feedbackCourseFilter]);
+  }, [feedbackCourseFilter, refreshRoundFeedback]);
 
   const updateCurrentHole = (updater: (hole: Hole) => Hole) => {
     const selectedHole = holeNumberRef.current;
@@ -832,7 +832,7 @@ export function AdminPanelScreen() {
       map.remove();
       mapRef.current = null;
     };
-  }, [currentHole?.number, selectedCourseId, tileSourceId]);
+  }, [currentHole?.number, selectedCourseId, tileSourceId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!currentHole || !mapRef.current) return;
@@ -900,7 +900,7 @@ export function AdminPanelScreen() {
       });
       teeMarkersRef.current[teeOption.id] = nextTeeMarker;
     });
-  }, [currentHole, mapReadyToken, orderedDraftTees, selectedCourseId]);
+  }, [currentHole, mapReadyToken, orderedDraftTees, selectedCourseId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!currentAreas || !mapRef.current) return;

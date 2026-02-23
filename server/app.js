@@ -1,6 +1,7 @@
 import cors from 'cors';
 import express from 'express';
 import { MongoClient } from 'mongodb';
+import { verifyFirebaseIdToken } from './firebaseAdmin.js';
 
 const DEFAULT_SETTINGS = {
   id: 'user-settings',
@@ -169,8 +170,45 @@ async function createApp() {
     return String(req.query.adminEmail ?? req.body?.adminEmail ?? '').trim().toLowerCase();
   }
 
-  function ensureAdmin(req, res) {
-    const adminEmail = getAdminEmail(req);
+  function getBearerToken(req) {
+    const header = req.headers.authorization;
+    if (typeof header !== 'string') return '';
+    const [scheme, token] = header.split(' ');
+    if (!scheme || !token) return '';
+    if (scheme.toLowerCase() !== 'bearer') return '';
+    return token.trim();
+  }
+
+  async function requireAuth(req, res) {
+    const idToken = getBearerToken(req);
+    if (!idToken) {
+      res.status(401).json({ error: 'Missing bearer token.' });
+      return null;
+    }
+
+    try {
+      const decoded = await verifyFirebaseIdToken(idToken);
+      return {
+        uid: String(decoded.uid ?? '').trim(),
+        email: String(decoded.email ?? '').trim().toLowerCase(),
+      };
+    } catch (_error) {
+      res.status(401).json({ error: 'Invalid or expired authentication token.' });
+      return null;
+    }
+  }
+
+  async function ensureAdmin(req, res) {
+    const auth = await requireAuth(req, res);
+    if (!auth) return null;
+
+    const requestedEmail = getAdminEmail(req);
+    if (requestedEmail && requestedEmail !== auth.email) {
+      res.status(403).json({ error: 'Admin identity mismatch.' });
+      return null;
+    }
+
+    const adminEmail = auth.email || requestedEmail;
     if (!adminEmail) {
       res.status(403).json({ error: 'Missing admin identity.' });
       return null;
@@ -182,28 +220,14 @@ async function createApp() {
     return adminEmail;
   }
 
-  function getRequestUserUid(req) {
-    const headerUid = req.headers['x-user-uid'];
-    if (typeof headerUid === 'string' && headerUid.trim()) return headerUid.trim();
-    if (Array.isArray(headerUid) && headerUid.length > 0 && String(headerUid[0]).trim()) {
-      return String(headerUid[0]).trim();
-    }
-    const queryUid = String(req.query.uid ?? '').trim();
-    if (queryUid) return queryUid;
-    return '';
-  }
-
-  function ensureUserAuth(req, res, uid) {
-    const requestUid = getRequestUserUid(req);
-    if (!requestUid) {
-      res.status(403).json({ error: 'Missing user identity.' });
-      return null;
-    }
-    if (requestUid !== uid) {
+  async function ensureUserAuth(req, res, uid) {
+    const auth = await requireAuth(req, res);
+    if (!auth) return null;
+    if (auth.uid !== uid) {
       res.status(403).json({ error: 'User identity mismatch.' });
       return null;
     }
-    return requestUid;
+    return auth;
   }
 
   app.get('/api/health', (_req, res) => {
@@ -213,7 +237,9 @@ async function createApp() {
   app.get('/api/users/:uid/bootstrap', async (req, res) => {
     try {
       const { uid } = req.params;
-      const email = String(req.query.email ?? '');
+      const auth = await ensureUserAuth(req, res, uid);
+      if (!auth) return;
+      const email = auth.email || String(req.query.email ?? '');
       const doc = await getOrCreateUser(uid, email);
       res.json(sanitizeUser(doc, uid, email));
     } catch (_error) {
@@ -224,12 +250,20 @@ async function createApp() {
   app.put('/api/users/:uid/profile', async (req, res) => {
     try {
       const { uid } = req.params;
+      const auth = await ensureUserAuth(req, res, uid);
+      if (!auth) return;
       const profile = req.body;
       await users.updateOne(
         { uid },
         {
           $set: {
-            profile: { ...profile, uid, updatedAt: new Date().toISOString() },
+            email: auth.email || String(profile?.email ?? ''),
+            profile: {
+              ...profile,
+              uid,
+              email: auth.email || String(profile?.email ?? ''),
+              updatedAt: new Date().toISOString(),
+            },
             updatedAt: new Date().toISOString(),
           },
           $setOnInsert: { createdAt: new Date().toISOString(), rounds: [], courses: [] },
@@ -237,7 +271,7 @@ async function createApp() {
         { upsert: true },
       );
       const updated = await users.findOne({ uid });
-      res.json(sanitizeUser(updated, uid));
+      res.json(sanitizeUser(updated, uid, auth.email));
     } catch (_error) {
       res.status(500).json({ error: 'Failed to update profile.' });
     }
@@ -246,12 +280,15 @@ async function createApp() {
   app.put('/api/users/:uid/settings', async (req, res) => {
     try {
       const { uid } = req.params;
+      const auth = await ensureUserAuth(req, res, uid);
+      if (!auth) return;
       const settings = req.body;
       await users.updateOne(
         { uid },
         {
           $set: {
             settings: { ...settings, id: 'user-settings', updatedAt: new Date().toISOString() },
+            ...(auth.email ? { email: auth.email } : {}),
             updatedAt: new Date().toISOString(),
           },
           $setOnInsert: { createdAt: new Date().toISOString(), rounds: [], courses: [] },
@@ -259,7 +296,7 @@ async function createApp() {
         { upsert: true },
       );
       const updated = await users.findOne({ uid });
-      res.json(sanitizeUser(updated, uid));
+      res.json(sanitizeUser(updated, uid, auth.email));
     } catch (_error) {
       res.status(500).json({ error: 'Failed to update settings.' });
     }
@@ -268,6 +305,7 @@ async function createApp() {
   app.put('/api/users/:uid/courses/:courseId', async (req, res) => {
     try {
       const { uid, courseId } = req.params;
+      if (!await ensureUserAuth(req, res, uid)) return;
       const course = req.body;
       const doc = await getOrCreateUser(uid);
       const nextCourses = (doc.courses ?? []).filter((entry) => entry.id !== courseId);
@@ -288,6 +326,7 @@ async function createApp() {
   app.delete('/api/users/:uid/courses/:courseId', async (req, res) => {
     try {
       const { uid, courseId } = req.params;
+      if (!await ensureUserAuth(req, res, uid)) return;
       const doc = await getOrCreateUser(uid);
       const nextCourses = (doc.courses ?? []).filter((entry) => entry.id !== courseId);
 
@@ -306,6 +345,7 @@ async function createApp() {
   app.put('/api/users/:uid/rounds/:roundId', async (req, res) => {
     try {
       const { uid, roundId } = req.params;
+      if (!await ensureUserAuth(req, res, uid)) return;
       const round = req.body;
       const doc = await getOrCreateUser(uid);
       const existingRound = (doc.rounds ?? []).find((entry) => entry.id === roundId);
@@ -343,6 +383,7 @@ async function createApp() {
   app.delete('/api/users/:uid/rounds/:roundId', async (req, res) => {
     try {
       const { uid, roundId } = req.params;
+      if (!await ensureUserAuth(req, res, uid)) return;
       const doc = await getOrCreateUser(uid);
       const nextRounds = (doc.rounds ?? []).filter((entry) => entry.id !== roundId);
       const nextActiveRoundId = doc.activeRoundId === roundId ? null : doc.activeRoundId;
@@ -368,6 +409,7 @@ async function createApp() {
   app.put('/api/users/:uid/active-round', async (req, res) => {
     try {
       const { uid } = req.params;
+      if (!await ensureUserAuth(req, res, uid)) return;
       const { roundId } = req.body;
       await users.updateOne(
         { uid },
@@ -447,8 +489,7 @@ async function createApp() {
   app.get('/api/users/:uid/teams', async (req, res) => {
     try {
       const { uid } = req.params;
-      const requestUid = ensureUserAuth(req, res, uid);
-      if (!requestUid) return;
+      if (!await ensureUserAuth(req, res, uid)) return;
       const docs = await teams.find({ 'members.uid': uid }).sort({ updatedAt: -1 }).toArray();
       res.json({ teams: docs.map(mapTeam) });
     } catch (_error) {
@@ -464,8 +505,7 @@ async function createApp() {
         res.status(400).json({ error: 'uid and name are required.' });
         return;
       }
-      const requestUid = ensureUserAuth(req, res, uid);
-      if (!requestUid) return;
+      if (!await ensureUserAuth(req, res, uid)) return;
       await getOrCreateUser(uid, String(req.body?.email ?? ''));
 
       const createdAt = new Date().toISOString();
@@ -501,8 +541,7 @@ async function createApp() {
         res.status(400).json({ error: 'uid and inviteCode are required.' });
         return;
       }
-      const requestUid = ensureUserAuth(req, res, uid);
-      if (!requestUid) return;
+      if (!await ensureUserAuth(req, res, uid)) return;
       await getOrCreateUser(uid, String(req.body?.email ?? ''));
 
       const existing = await teams.findOne({ inviteCode });
@@ -539,11 +578,9 @@ async function createApp() {
   app.get('/api/teams/:teamId/events', async (req, res) => {
     try {
       const { teamId } = req.params;
-      const uid = getRequestUserUid(req);
-      if (!uid) {
-        res.status(403).json({ error: 'Missing user identity.' });
-        return;
-      }
+      const auth = await requireAuth(req, res);
+      if (!auth) return;
+      const uid = auth.uid;
       const membership = await teams.findOne({ id: teamId, 'members.uid': uid });
       if (!membership) {
         res.status(403).json({ error: 'Team access denied.' });
@@ -572,8 +609,7 @@ async function createApp() {
         res.status(400).json({ error: 'Invalid event format.' });
         return;
       }
-      const requestUid = ensureUserAuth(req, res, uid);
-      if (!requestUid) return;
+      if (!await ensureUserAuth(req, res, uid)) return;
 
       const team = await teams.findOne({ id: teamId, 'members.uid': uid });
       if (!team) {
@@ -603,11 +639,9 @@ async function createApp() {
   app.get('/api/team-events/:eventId/leaderboard', async (req, res) => {
     try {
       const { eventId } = req.params;
-      const uid = getRequestUserUid(req);
-      if (!uid) {
-        res.status(403).json({ error: 'Missing user identity.' });
-        return;
-      }
+      const auth = await requireAuth(req, res);
+      if (!auth) return;
+      const uid = auth.uid;
       const event = await teamEvents.findOne({ id: eventId });
       if (!event) {
         res.status(404).json({ error: 'Team event not found.' });
@@ -715,7 +749,7 @@ async function createApp() {
 
   app.get('/api/admin/members', async (req, res) => {
     try {
-      const adminEmail = ensureAdmin(req, res);
+      const adminEmail = await ensureAdmin(req, res);
       if (!adminEmail) return;
 
       const status = String(req.query.status ?? 'pending');
@@ -742,7 +776,7 @@ async function createApp() {
 
   app.put('/api/admin/members/:uid/approval', async (req, res) => {
     try {
-      const adminEmail = ensureAdmin(req, res);
+      const adminEmail = await ensureAdmin(req, res);
       if (!adminEmail) return;
 
       const { uid } = req.params;
@@ -798,7 +832,7 @@ async function createApp() {
 
   app.get('/api/admin/courses/:courseId/audit', async (req, res) => {
     try {
-      const adminEmail = ensureAdmin(req, res);
+      const adminEmail = await ensureAdmin(req, res);
       if (!adminEmail) return;
 
       const { courseId } = req.params;
@@ -827,7 +861,7 @@ async function createApp() {
 
   app.post('/api/admin/courses/:courseId/audit', async (req, res) => {
     try {
-      const adminEmail = ensureAdmin(req, res);
+      const adminEmail = await ensureAdmin(req, res);
       if (!adminEmail) return;
 
       const { courseId } = req.params;
@@ -855,7 +889,7 @@ async function createApp() {
 
   app.get('/api/admin/feedback/round', async (req, res) => {
     try {
-      const adminEmail = ensureAdmin(req, res);
+      const adminEmail = await ensureAdmin(req, res);
       if (!adminEmail) return;
 
       const courseId = String(req.query.courseId ?? 'all').trim();
@@ -879,7 +913,7 @@ async function createApp() {
 
   app.put('/api/admin/feedback/round/:feedbackId/reply', async (req, res) => {
     try {
-      const adminEmail = ensureAdmin(req, res);
+      const adminEmail = await ensureAdmin(req, res);
       if (!adminEmail) return;
 
       const { feedbackId } = req.params;
@@ -917,6 +951,7 @@ async function createApp() {
   app.get('/api/users/:uid/feedback/round', async (req, res) => {
     try {
       const { uid } = req.params;
+      if (!await ensureUserAuth(req, res, uid)) return;
       const limit = Math.max(1, Math.min(200, Number(req.query.limit ?? 60)));
       const entries = await roundFeedback
         .find({ uid })
@@ -935,6 +970,7 @@ async function createApp() {
   app.put('/api/users/:uid/feedback/round/:feedbackId/read', async (req, res) => {
     try {
       const { uid, feedbackId } = req.params;
+      if (!await ensureUserAuth(req, res, uid)) return;
 
       const entry = await roundFeedback.findOne({ id: feedbackId, uid });
       if (!entry) {
@@ -959,6 +995,8 @@ async function createApp() {
 
   app.post('/api/analytics/event', async (req, res) => {
     try {
+      const auth = await requireAuth(req, res);
+      if (!auth) return;
       const eventName = String(req.body?.eventName ?? '').trim();
       if (!eventName) {
         res.status(400).json({ error: 'eventName is required.' });
@@ -969,8 +1007,8 @@ async function createApp() {
         id: crypto.randomUUID(),
         eventName,
         stage: String(req.body?.stage ?? ''),
-        uid: String(req.body?.uid ?? ''),
-        email: String(req.body?.email ?? ''),
+        uid: auth.uid,
+        email: auth.email,
         meta: req.body?.meta && typeof req.body.meta === 'object' ? req.body.meta : {},
         timestamp: new Date().toISOString(),
       };
@@ -983,6 +1021,8 @@ async function createApp() {
 
   app.post('/api/feedback/round', async (req, res) => {
     try {
+      const auth = await requireAuth(req, res);
+      if (!auth) return;
       const rating = Number(req.body?.rating ?? 0);
       if (!Number.isFinite(rating) || rating < 1 || rating > 5) {
         res.status(400).json({ error: 'rating must be between 1 and 5.' });
@@ -991,8 +1031,8 @@ async function createApp() {
 
       const payload = {
         id: crypto.randomUUID(),
-        uid: String(req.body?.uid ?? ''),
-        email: String(req.body?.email ?? ''),
+        uid: auth.uid,
+        email: auth.email,
         roundId: String(req.body?.roundId ?? ''),
         courseId: String(req.body?.courseId ?? ''),
         rating,

@@ -6,6 +6,7 @@ import type {
   UserProfile,
   UserSettings,
 } from '../domain/types';
+import { auth } from '../auth/firebase';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
 
@@ -111,16 +112,37 @@ async function parseJson<T>(response: Response): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+async function withAuthHeaders(baseHeaders?: HeadersInit): Promise<Headers> {
+  const headers = new Headers(baseHeaders);
+  const user = auth.currentUser;
+  if (!user) return headers;
+
+  try {
+    const idToken = await user.getIdToken();
+    headers.set('Authorization', `Bearer ${idToken}`);
+    headers.set('x-user-uid', user.uid);
+  } catch {
+    // best-effort header enrichment; server will reject protected routes if unavailable
+  }
+
+  return headers;
+}
+
+async function apiFetch(input: string, init: RequestInit = {}): Promise<Response> {
+  const headers = await withAuthHeaders(init.headers);
+  return fetch(input, { ...init, headers });
+}
+
 export const apiClient = {
   async bootstrap(uid: string, email = ''): Promise<BootstrapResponse> {
-    const response = await fetch(
+    const response = await apiFetch(
       `${API_BASE}/users/${uid}/bootstrap?email=${encodeURIComponent(email)}`,
     );
     return parseJson<BootstrapResponse>(response);
   },
 
   async saveProfile(uid: string, profile: UserProfile): Promise<BootstrapResponse> {
-    const response = await fetch(`${API_BASE}/users/${uid}/profile`, {
+    const response = await apiFetch(`${API_BASE}/users/${uid}/profile`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(profile),
@@ -129,7 +151,7 @@ export const apiClient = {
   },
 
   async saveSettings(uid: string, settings: UserSettings): Promise<BootstrapResponse> {
-    const response = await fetch(`${API_BASE}/users/${uid}/settings`, {
+    const response = await apiFetch(`${API_BASE}/users/${uid}/settings`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(settings),
@@ -138,7 +160,7 @@ export const apiClient = {
   },
 
   async upsertCourse(uid: string, course: Course): Promise<BootstrapResponse> {
-    const response = await fetch(`${API_BASE}/users/${uid}/courses/${course.id}`, {
+    const response = await apiFetch(`${API_BASE}/users/${uid}/courses/${course.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(course),
@@ -147,7 +169,7 @@ export const apiClient = {
   },
 
   async upsertRound(uid: string, round: Round): Promise<BootstrapResponse> {
-    const response = await fetch(`${API_BASE}/users/${uid}/rounds/${round.id}`, {
+    const response = await apiFetch(`${API_BASE}/users/${uid}/rounds/${round.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(round),
@@ -163,14 +185,14 @@ export const apiClient = {
   },
 
   async deleteRound(uid: string, roundId: string): Promise<BootstrapResponse> {
-    const response = await fetch(`${API_BASE}/users/${uid}/rounds/${roundId}`, {
+    const response = await apiFetch(`${API_BASE}/users/${uid}/rounds/${roundId}`, {
       method: 'DELETE',
     });
     return parseJson<BootstrapResponse>(response);
   },
 
   async setActiveRound(uid: string, roundId: string | null): Promise<BootstrapResponse> {
-    const response = await fetch(`${API_BASE}/users/${uid}/active-round`, {
+    const response = await apiFetch(`${API_BASE}/users/${uid}/active-round`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ roundId }),
@@ -184,14 +206,14 @@ export const apiClient = {
     role: LeaderboardRole,
   ): Promise<LeaderboardEntry[]> {
     const query = new URLSearchParams({ timeframe, courseId, role }).toString();
-    const response = await fetch(`${API_BASE}/leaderboard?${query}`);
+    const response = await apiFetch(`${API_BASE}/leaderboard?${query}`);
     const data = await parseJson<{ entries: LeaderboardEntry[] }>(response);
     return data.entries;
   },
 
   async listMembers(adminEmail: string, status: MembershipStatusFilter = 'pending'): Promise<AdminMember[]> {
     const query = new URLSearchParams({ status }).toString();
-    const response = await fetch(`${API_BASE}/admin/members?${query}`, {
+    const response = await apiFetch(`${API_BASE}/admin/members?${query}`, {
       headers: { 'x-admin-email': adminEmail },
     });
     const data = await parseJson<{ members: AdminMember[] }>(response);
@@ -203,7 +225,7 @@ export const apiClient = {
     uid: string,
     status: 'pending' | 'approved',
   ): Promise<AdminMember> {
-    const response = await fetch(`${API_BASE}/admin/members/${uid}/approval`, {
+    const response = await apiFetch(`${API_BASE}/admin/members/${uid}/approval`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -217,7 +239,7 @@ export const apiClient = {
 
   async listCourseAuditLogs(adminEmail: string, courseId: string, limit = 30): Promise<CourseAuditLogEntry[]> {
     const query = new URLSearchParams({ limit: String(limit) }).toString();
-    const response = await fetch(`${API_BASE}/admin/courses/${courseId}/audit?${query}`, {
+    const response = await apiFetch(`${API_BASE}/admin/courses/${courseId}/audit?${query}`, {
       headers: { 'x-admin-email': adminEmail },
     });
     const data = await parseJson<{ logs: CourseAuditLogEntry[] }>(response);
@@ -230,7 +252,7 @@ export const apiClient = {
     action: string,
     details: string,
   ): Promise<CourseAuditLogEntry> {
-    const response = await fetch(`${API_BASE}/admin/courses/${courseId}/audit`, {
+    const response = await apiFetch(`${API_BASE}/admin/courses/${courseId}/audit`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -243,7 +265,7 @@ export const apiClient = {
   },
 
   async trackEvent(payload: AnalyticsEventPayload): Promise<void> {
-    const response = await fetch(`${API_BASE}/analytics/event`, {
+    const response = await apiFetch(`${API_BASE}/analytics/event`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -252,7 +274,7 @@ export const apiClient = {
   },
 
   async submitRoundFeedback(payload: RoundFeedbackPayload): Promise<void> {
-    const response = await fetch(`${API_BASE}/feedback/round`, {
+    const response = await apiFetch(`${API_BASE}/feedback/round`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -265,7 +287,7 @@ export const apiClient = {
       courseId,
       limit: String(limit),
     }).toString();
-    const response = await fetch(`${API_BASE}/admin/feedback/round?${query}`, {
+    const response = await apiFetch(`${API_BASE}/admin/feedback/round?${query}`, {
       headers: { 'x-admin-email': adminEmail },
     });
     const data = await parseJson<{ entries: RoundFeedbackEntry[] }>(response);
@@ -273,7 +295,7 @@ export const apiClient = {
   },
 
   async replyRoundFeedback(adminEmail: string, feedbackId: string, reply: string): Promise<RoundFeedbackEntry> {
-    const response = await fetch(`${API_BASE}/admin/feedback/round/${encodeURIComponent(feedbackId)}/reply`, {
+    const response = await apiFetch(`${API_BASE}/admin/feedback/round/${encodeURIComponent(feedbackId)}/reply`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -287,13 +309,13 @@ export const apiClient = {
 
   async listMyRoundFeedback(uid: string, limit = 50): Promise<RoundFeedbackEntry[]> {
     const query = new URLSearchParams({ limit: String(limit) }).toString();
-    const response = await fetch(`${API_BASE}/users/${encodeURIComponent(uid)}/feedback/round?${query}`);
+    const response = await apiFetch(`${API_BASE}/users/${encodeURIComponent(uid)}/feedback/round?${query}`);
     const data = await parseJson<{ entries: RoundFeedbackEntry[] }>(response);
     return data.entries;
   },
 
   async markRoundFeedbackRead(uid: string, feedbackId: string): Promise<RoundFeedbackEntry> {
-    const response = await fetch(
+    const response = await apiFetch(
       `${API_BASE}/users/${encodeURIComponent(uid)}/feedback/round/${encodeURIComponent(feedbackId)}/read`,
       { method: 'PUT' },
     );
@@ -303,7 +325,7 @@ export const apiClient = {
 
   async listMyTeams(uid: string): Promise<Team[]> {
     const query = new URLSearchParams({ uid }).toString();
-    const response = await fetch(`${API_BASE}/users/${encodeURIComponent(uid)}/teams?${query}`, {
+    const response = await apiFetch(`${API_BASE}/users/${encodeURIComponent(uid)}/teams?${query}`, {
       headers: { 'x-user-uid': uid },
     });
     const data = await parseJson<{ teams: Team[] }>(response);
@@ -316,7 +338,7 @@ export const apiClient = {
     displayName?: string;
     name: string;
   }): Promise<Team> {
-    const response = await fetch(`${API_BASE}/teams`, {
+    const response = await apiFetch(`${API_BASE}/teams`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -334,7 +356,7 @@ export const apiClient = {
     displayName?: string;
     inviteCode: string;
   }): Promise<Team> {
-    const response = await fetch(`${API_BASE}/teams/join`, {
+    const response = await apiFetch(`${API_BASE}/teams/join`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -348,7 +370,7 @@ export const apiClient = {
 
   async listTeamEvents(teamId: string, uid: string): Promise<TeamEvent[]> {
     const query = new URLSearchParams({ uid }).toString();
-    const response = await fetch(`${API_BASE}/teams/${encodeURIComponent(teamId)}/events?${query}`, {
+    const response = await apiFetch(`${API_BASE}/teams/${encodeURIComponent(teamId)}/events?${query}`, {
       headers: { 'x-user-uid': uid },
     });
     const data = await parseJson<{ events: TeamEvent[] }>(response);
@@ -363,7 +385,7 @@ export const apiClient = {
     endsAt: string;
     format: 'stroke-play' | 'stableford' | 'match-play' | 'scramble';
   }): Promise<TeamEvent> {
-    const response = await fetch(`${API_BASE}/teams/${encodeURIComponent(payload.teamId)}/events`, {
+    const response = await apiFetch(`${API_BASE}/teams/${encodeURIComponent(payload.teamId)}/events`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -377,7 +399,7 @@ export const apiClient = {
 
   async teamEventLeaderboard(eventId: string, uid: string): Promise<TeamEventLeaderboardEntry[]> {
     const query = new URLSearchParams({ uid }).toString();
-    const response = await fetch(`${API_BASE}/team-events/${encodeURIComponent(eventId)}/leaderboard?${query}`, {
+    const response = await apiFetch(`${API_BASE}/team-events/${encodeURIComponent(eventId)}/leaderboard?${query}`, {
       headers: { 'x-user-uid': uid },
     });
     const data = await parseJson<{ entries: TeamEventLeaderboardEntry[] }>(response);

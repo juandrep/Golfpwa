@@ -39,6 +39,8 @@ function HistoryScreenContent({ onNavigate }: Props = {}) {
   const [selectedEventId, setSelectedEventId] = useState('');
   const [teamBoardLoading, setTeamBoardLoading] = useState(false);
   const [teamLeaderboard, setTeamLeaderboard] = useState<TeamEventLeaderboardEntry[]>([]);
+  const [boardMode, setBoardMode] = useState<'global' | 'private'>('global');
+  const [showFullRanking, setShowFullRanking] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -134,112 +136,156 @@ function HistoryScreenContent({ onNavigate }: Props = {}) {
     );
   }
 
-  if (leaderboard.length === 0) {
-    return (
-      <Card className="space-y-3 text-center">
-        <h3 className="text-lg font-semibold text-slate-900">{t('leaderboard.title')}</h3>
-        <p className="text-sm text-slate-600">{t('leaderboard.noData')}</p>
-        <div className="flex justify-center gap-2">
-          <Button onClick={() => onNavigate?.('/enter-score')}>{t('leaderboard.ctaEnterScore')}</Button>
-          <Button variant="secondary" onClick={() => onNavigate?.('/my-stuff')}>{t('leaderboard.ctaOpenMyStuff')}</Button>
-        </div>
-      </Card>
-    );
-  }
+  const visibleRest = showFullRanking ? rest : rest.slice(0, 5);
 
   return (
     <div className="space-y-3 pb-20">
       <Card className="space-y-3">
         <h2 className="text-xl font-semibold">{t('leaderboard.title')}</h2>
-        <SegmentedControl
-          options={[
-            { label: t('leaderboard.thisWeek'), value: 'week' },
-            { label: t('leaderboard.thisMonth'), value: 'month' },
-            { label: t('leaderboard.allTime'), value: 'all' },
-          ]}
-          value={timeframe}
-          onChange={setTimeframe}
-        />
-        <select
-          className="rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-sm"
-          value={courseFilter}
-          onChange={(event) => setCourseFilter(event.target.value)}
-        >
-          <option value="all">{t('leaderboard.allCourses')}</option>
-          {courses.map((course) => (
-            <option key={course.id} value={course.id}>
-              {course.name}
-            </option>
-          ))}
-        </select>
-        <SegmentedControl
-          options={[
-            { label: t('leaderboard.combined'), value: 'combined' },
-            { label: t('leaderboard.members'), value: 'members' },
-            { label: t('leaderboard.visitors'), value: 'visitors' },
-          ]}
-          value={roleFilter}
-          onChange={setRoleFilter}
-        />
-      </Card>
+        <div className="grid grid-cols-2 gap-2">
+          <Button
+            variant={boardMode === 'global' ? 'primary' : 'secondary'}
+            className="py-2"
+            onClick={() => setBoardMode('global')}
+          >
+            {t('leaderboard.title')}
+          </Button>
+          <Button
+            variant={boardMode === 'private' ? 'primary' : 'secondary'}
+            className="py-2"
+            onClick={() => setBoardMode('private')}
+          >
+            {t('leaderboard.privateEvent')}
+          </Button>
+        </div>
 
-      <Card className="space-y-3">
-        <h3 className="font-semibold">{t('leaderboard.privateEvent')}</h3>
-        <select
-          className="rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-sm"
-          value={selectedTeamId}
-          onChange={(event) => setSelectedTeamId(event.target.value)}
-        >
-          <option value="">{t('leaderboard.selectTeam')}</option>
-          {teams.map((team) => (
-            <option key={team.id} value={team.id}>{team.name}</option>
-          ))}
-        </select>
-        <select
-          className="rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-sm"
-          value={selectedEventId}
-          onChange={(event) => setSelectedEventId(event.target.value)}
-          disabled={!selectedTeamId}
-        >
-          <option value="">{selectedTeamId ? t('leaderboard.selectEvent') : t('leaderboard.selectTeamFirst')}</option>
-          {teamEvents.map((event) => (
-            <option key={event.id} value={event.id}>{event.name} ({event.format})</option>
-          ))}
-        </select>
-        {teamBoardLoading ? (
-          <div className="space-y-2">
-            {Array.from({ length: 3 }, (_, index) => (
-              <div key={index} className="h-14 animate-pulse rounded-lg bg-slate-100" />
-            ))}
-          </div>
-        ) : teamLeaderboard.length === 0 ? (
-          <div className="space-y-2">
-            <p className="text-sm text-slate-500">{t('leaderboard.noEventRounds')}</p>
-            <div className="flex gap-2">
-              <Button className="px-3 py-2 text-xs" onClick={() => onNavigate?.('/enter-score')}>
-                {t('leaderboard.ctaEnterScore')}
-              </Button>
-              <Button variant="secondary" className="px-3 py-2 text-xs" onClick={() => onNavigate?.('/my-stuff')}>
-                {t('leaderboard.ctaCreateTeamEvent')}
-              </Button>
+        {boardMode === 'global' ? (
+          <>
+            <SegmentedControl
+              options={[
+                { label: t('leaderboard.thisWeek'), value: 'week' },
+                { label: t('leaderboard.thisMonth'), value: 'month' },
+                { label: t('leaderboard.allTime'), value: 'all' },
+              ]}
+              value={timeframe}
+              onChange={setTimeframe}
+            />
+            <div className="grid grid-cols-2 gap-2">
+              <select
+                className="rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-sm"
+                value={courseFilter}
+                onChange={(event) => {
+                  setCourseFilter(event.target.value);
+                  setShowFullRanking(false);
+                }}
+              >
+                <option value="all">{t('leaderboard.allCourses')}</option>
+                {courses.map((course) => (
+                  <option key={course.id} value={course.id}>
+                    {course.name}
+                  </option>
+                ))}
+              </select>
+              <select
+                className="rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-sm"
+                value={roleFilter}
+                onChange={(event) => {
+                  setRoleFilter(event.target.value as 'combined' | 'members' | 'visitors');
+                  setShowFullRanking(false);
+                }}
+              >
+                <option value="combined">{t('leaderboard.combined')}</option>
+                <option value="members">{t('leaderboard.members')}</option>
+                <option value="visitors">{t('leaderboard.visitors')}</option>
+              </select>
             </div>
-          </div>
+          </>
         ) : (
-          <div className="space-y-2">
-            {teamLeaderboard.map((entry) => (
-              <div key={entry.uid} className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-sm">
-                <div>
-                  <p className="font-semibold">#{entry.position} {entry.displayName}</p>
-                  <p className="text-xs text-slate-500">{t('leaderboard.avg')} {entry.averageScore.toFixed(1)} · {entry.rounds} {t('leaderboard.rounds')}</p>
-                </div>
-                <Badge>{t('leaderboard.bestScore')} {entry.bestScore}</Badge>
+          <>
+            {!authUid ? (
+              <div className="space-y-2">
+                <p className="text-sm text-slate-600">{t('leaderboard.selectTeamFirst')}</p>
+                <Button className="px-3 py-2 text-xs" onClick={() => onNavigate?.('/my-stuff')}>
+                  {t('leaderboard.ctaOpenMyStuff')}
+                </Button>
               </div>
-            ))}
-          </div>
+            ) : (
+              <>
+                <select
+                  className="rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-sm"
+                  value={selectedTeamId}
+                  onChange={(event) => setSelectedTeamId(event.target.value)}
+                >
+                  <option value="">{t('leaderboard.selectTeam')}</option>
+                  {teams.map((team) => (
+                    <option key={team.id} value={team.id}>{team.name}</option>
+                  ))}
+                </select>
+                <select
+                  className="rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-sm"
+                  value={selectedEventId}
+                  onChange={(event) => setSelectedEventId(event.target.value)}
+                  disabled={!selectedTeamId}
+                >
+                  <option value="">{selectedTeamId ? t('leaderboard.selectEvent') : t('leaderboard.selectTeamFirst')}</option>
+                  {teamEvents.map((event) => (
+                    <option key={event.id} value={event.id}>{event.name} ({event.format})</option>
+                  ))}
+                </select>
+              </>
+            )}
+          </>
         )}
       </Card>
 
-      {myEntry ? (
+      {boardMode === 'private' ? (
+        <Card className="space-y-3">
+          {teamBoardLoading ? (
+            <div className="space-y-2">
+              {Array.from({ length: 3 }, (_, index) => (
+                <div key={index} className="h-14 animate-pulse rounded-lg bg-slate-100" />
+              ))}
+            </div>
+          ) : teamLeaderboard.length === 0 ? (
+            <div className="space-y-2">
+              <p className="text-sm text-slate-500">{t('leaderboard.noEventRounds')}</p>
+              <div className="flex gap-2">
+                <Button className="px-3 py-2 text-xs" onClick={() => onNavigate?.('/enter-score')}>
+                  {t('leaderboard.ctaEnterScore')}
+                </Button>
+                <Button variant="secondary" className="px-3 py-2 text-xs" onClick={() => onNavigate?.('/my-stuff')}>
+                  {t('leaderboard.ctaCreateTeamEvent')}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {teamLeaderboard.map((entry) => (
+                <div key={entry.uid} className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-sm">
+                  <div>
+                    <p className="font-semibold">#{entry.position} {entry.displayName}</p>
+                    <p className="text-xs text-slate-500">{t('leaderboard.avg')} {entry.averageScore.toFixed(1)} · {entry.rounds} {t('leaderboard.rounds')}</p>
+                  </div>
+                  <Badge>{t('leaderboard.bestScore')} {entry.bestScore}</Badge>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      ) : null}
+
+      {boardMode === 'global' && leaderboard.length === 0 ? (
+        <Card className="space-y-3 text-center">
+          <h3 className="text-lg font-semibold text-slate-900">{t('leaderboard.title')}</h3>
+          <p className="text-sm text-slate-600">{t('leaderboard.noData')}</p>
+          <div className="flex justify-center gap-2">
+            <Button onClick={() => onNavigate?.('/enter-score')}>{t('leaderboard.ctaEnterScore')}</Button>
+            <Button variant="secondary" onClick={() => onNavigate?.('/my-stuff')}>{t('leaderboard.ctaOpenMyStuff')}</Button>
+          </div>
+        </Card>
+      ) : null}
+
+      {boardMode === 'global' && myEntry ? (
         <Card className="border-cyan-200 bg-cyan-50/80">
           <div className="flex items-center justify-between">
             <p className="text-sm text-slate-600">{t('leaderboard.you')}</p>
@@ -252,7 +298,7 @@ function HistoryScreenContent({ onNavigate }: Props = {}) {
         </Card>
       ) : null}
 
-      {topThree.length > 0 ? (
+      {boardMode === 'global' && topThree.length > 0 ? (
         <Card className="overflow-hidden border-cyan-200 bg-gradient-to-b from-cyan-100 via-cyan-50 to-white p-4 text-slate-900">
           <div className="mb-3 flex items-center justify-center">
             <span className="rounded-full bg-gradient-to-r from-cyan-500 to-sky-500 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-white">
@@ -287,45 +333,52 @@ function HistoryScreenContent({ onNavigate }: Props = {}) {
         </Card>
       ) : null}
 
-      <motion.div
-        initial="hidden"
-        animate="show"
-        variants={{ hidden: {}, show: { transition: { staggerChildren: 0.04 } } }}
-        className="space-y-2"
-      >
-        {rest.map((entry) => {
-          const isCurrentUser = entry.uid === authUid;
-          return (
-            <motion.div
-              key={entry.uid}
-              variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } }}
-            >
-              <Card
-                className={`flex items-center justify-between ${isCurrentUser ? 'border-cyan-300 bg-cyan-50' : 'border-slate-200 bg-white'}`}
+      {boardMode === 'global' && visibleRest.length > 0 ? (
+        <motion.div
+          initial="hidden"
+          animate="show"
+          variants={{ hidden: {}, show: { transition: { staggerChildren: 0.04 } } }}
+          className="space-y-2"
+        >
+          {visibleRest.map((entry) => {
+            const isCurrentUser = entry.uid === authUid;
+            return (
+              <motion.div
+                key={entry.uid}
+                variants={{ hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } }}
               >
-                <div className="flex items-center gap-3">
-                  <motion.div
-                    whileHover={{ scale: 1.06 }}
-                    className="grid h-10 w-10 place-items-center rounded-full bg-cyan-100 text-xs font-bold text-cyan-800"
-                  >
-                    {initialsFromName(entry.displayName)}
-                  </motion.div>
-                  <div>
-                    <p className="text-sm font-semibold text-slate-900">#{entry.position} {entry.displayName}</p>
-                    <p className="text-xs text-slate-500">
-                      {t('leaderboard.avg')} {entry.averageScore.toFixed(1)} · {entry.rounds} {t('leaderboard.rounds')}
-                    </p>
+                <Card
+                  className={`flex items-center justify-between ${isCurrentUser ? 'border-cyan-300 bg-cyan-50' : 'border-slate-200 bg-white'}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <motion.div
+                      whileHover={{ scale: 1.06 }}
+                      className="grid h-10 w-10 place-items-center rounded-full bg-cyan-100 text-xs font-bold text-cyan-800"
+                    >
+                      {initialsFromName(entry.displayName)}
+                    </motion.div>
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900">#{entry.position} {entry.displayName}</p>
+                      <p className="text-xs text-slate-500">
+                        {t('leaderboard.avg')} {entry.averageScore.toFixed(1)} · {entry.rounds} {t('leaderboard.rounds')}
+                      </p>
+                    </div>
                   </div>
-                </div>
-                <div className="text-right">
-                  <p className="text-base font-bold text-slate-900">{entry.bestScore}</p>
-                  <Badge className="capitalize">{entry.role}</Badge>
-                </div>
-              </Card>
-            </motion.div>
-          );
-        })}
-      </motion.div>
+                  <div className="text-right">
+                    <p className="text-base font-bold text-slate-900">{entry.bestScore}</p>
+                    <Badge className="capitalize">{entry.role}</Badge>
+                  </div>
+                </Card>
+              </motion.div>
+            );
+          })}
+          {rest.length > 5 ? (
+            <Button variant="secondary" className="w-full" onClick={() => setShowFullRanking((previous) => !previous)}>
+              {showFullRanking ? t('buttons.close') : t('buttons.open')}
+            </Button>
+          ) : null}
+        </motion.div>
+      ) : null}
     </div>
   );
 }
