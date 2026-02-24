@@ -354,12 +354,39 @@ export function ScorecardScreen() {
     await saveRound({ ...activeRound, currentHoleNumber: nextHole }, true);
   };
 
+  const finishActiveRound = async () => {
+    if (!activeRound) return;
+    const justCompletedRound = activeRound;
+    await completeRound(activeRound);
+    void closeRoundStatusNotification();
+    triggerHaptic();
+    void trackAppEvent({
+      eventName: 'round_finished',
+      stage: 'finish_round',
+      uid: authUid,
+      email: authEmail,
+      meta: {
+        roundId: justCompletedRound.id,
+        courseId: justCompletedRound.courseId,
+        totalStrokes: justCompletedRound.scores.reduce((sum, item) => sum + item.strokes, 0),
+      },
+    });
+    setRecapRound(justCompletedRound);
+    setFeedbackRoundMeta({
+      roundId: justCompletedRound.id,
+      courseId: justCompletedRound.courseId,
+    });
+    setShowRoundRecapModal(true);
+    showToast(t('toast.scoreSaved'));
+  };
+
   const toggleStableford = async (enabled: boolean) => {
     if (!activeRound) return;
     await saveRound({ ...activeRound, stablefordEnabled: enabled }, true);
   };
 
   const total = activeRound?.scores.reduce((sum, score) => sum + score.strokes, 0) ?? 0;
+  const isLastHole = !!course && currentHoleNumber >= course.holes.length;
   const roundWindLabel = activeRound?.weather?.windKph !== undefined
     ? `${Math.round(activeRound.weather.windKph)} kph`
     : t('score.notAvailable');
@@ -676,7 +703,13 @@ export function ScorecardScreen() {
                 </div>
                 <div className="flex gap-1.5">
                   <Button variant="secondary" className="px-2 py-1 text-xs" onClick={() => void goHole(-1)}>{t('score.prev')}</Button>
-                  <Button variant="secondary" className="px-2 py-1 text-xs" onClick={() => void goHole(1)}>{t('score.next')}</Button>
+                  <Button
+                    variant="secondary"
+                    className="px-2 py-1 text-xs"
+                    onClick={() => void (isLastHole ? finishActiveRound() : goHole(1))}
+                  >
+                    {isLastHole ? t('score.finishRound') : t('score.next')}
+                  </Button>
                 </div>
               </div>
               <div className="grid grid-cols-4 gap-1.5 text-center">
@@ -758,32 +791,7 @@ export function ScorecardScreen() {
           </Card>
 
           <div className="grid grid-cols-2 gap-2">
-            <Button
-              onClick={async () => {
-                const justCompletedRound = activeRound;
-                await completeRound(activeRound);
-                void closeRoundStatusNotification();
-                triggerHaptic();
-                void trackAppEvent({
-                  eventName: 'round_finished',
-                  stage: 'finish_round',
-                  uid: authUid,
-                  email: authEmail,
-                  meta: {
-                    roundId: justCompletedRound.id,
-                    courseId: justCompletedRound.courseId,
-                    totalStrokes: justCompletedRound.scores.reduce((sum, item) => sum + item.strokes, 0),
-                  },
-                });
-                setRecapRound(justCompletedRound);
-                setFeedbackRoundMeta({
-                  roundId: justCompletedRound.id,
-                  courseId: justCompletedRound.courseId,
-                });
-                setShowRoundRecapModal(true);
-                showToast(t('toast.scoreSaved'));
-              }}
-            >
+            <Button onClick={() => void finishActiveRound()}>
               {t('score.finishRound')}
             </Button>
             <Button
@@ -816,8 +824,8 @@ export function ScorecardScreen() {
                   <Button variant="secondary" className="px-2 py-1 text-xs" onClick={() => setShowMoreSheet(true)}>
                     {t('score.quickActions')}
                   </Button>
-                  <Button className="px-2 py-1 text-xs" onClick={() => void goHole(1)}>
-                    {t('score.next')}
+                  <Button className="px-2 py-1 text-xs" onClick={() => void (isLastHole ? finishActiveRound() : goHole(1))}>
+                    {isLastHole ? t('score.finishRound') : t('score.next')}
                   </Button>
                 </div>
               </div>

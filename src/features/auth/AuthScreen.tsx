@@ -6,7 +6,7 @@ import { trackAppEvent } from '../../app/analytics';
 import { useI18n } from '../../app/i18n';
 
 export function AuthScreen() {
-  const { t } = useI18n();
+  const { t, locale, setLocale } = useI18n();
   const { signInWithGoogle } = useAuth();
   const [error, setError] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
@@ -60,6 +60,20 @@ export function AuthScreen() {
           variants={{ hidden: {}, show: { transition: { staggerChildren: 0.08 } } }}
           className="relative space-y-4 px-6 pt-8"
         >
+          <div className="flex items-center justify-end">
+            <label className="flex items-center gap-2 text-xs text-slate-600">
+              <span>{t('language.switch')}</span>
+              <select
+                value={locale}
+                onChange={(event) => setLocale(event.target.value as 'en' | 'pt')}
+                className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-100"
+              >
+                <option value="en">{t('language.en')}</option>
+                <option value="pt">{t('language.pt')}</option>
+              </select>
+            </label>
+          </div>
+
           <div className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-cyan-700">GreenCaddie</p>
             <h1 className="text-3xl font-bold leading-tight tracking-tight text-slate-900 sm:text-4xl">
