@@ -13,6 +13,7 @@ import { haversineMeters } from '../../domain/distance';
 import { weatherCodeToText } from '../../domain/weather';
 import {
   closeRoundStatusNotification,
+  getRoundStatusNotificationAvailability,
   requestRoundStatusNotificationPermission,
   showRoundStatusNotification,
 } from '../../app/roundStatusNotification';
@@ -154,7 +155,16 @@ export function ScorecardScreen() {
   const startRound = async () => {
     const course = selectedCourse;
     if (!course) return;
-    void requestRoundStatusNotificationPermission();
+    const notificationAvailability = getRoundStatusNotificationAvailability();
+    if (notificationAvailability === 'ios-requires-home-screen') {
+      showToast(t('score.notificationsInstallIosHint'));
+    }
+    const notificationPermissionPromise = requestRoundStatusNotificationPermission();
+    void notificationPermissionPromise.then((permission) => {
+      if (permission === 'denied') {
+        showToast(t('score.notificationsBlocked'));
+      }
+    });
 
     const teeId = selectedTeeId || suggestTee(course, handicapValue)?.id;
 

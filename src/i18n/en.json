@@ -72,6 +72,8 @@
     "weatherCaptured": "Weather context captured.",
     "weatherUnavailable": "Unable to fetch weather right now.",
     "enableLocationForWeather": "Enable location to capture weather.",
+    "notificationsInstallIosHint": "On iPhone/iPad, install the app to Home Screen first, then start a round to enable notifications.",
+    "notificationsBlocked": "Notifications are blocked. Enable them in browser/app settings.",
     "holeHeader": "Hole Header",
     "hole": "Hole",
     "prev": "Prev",

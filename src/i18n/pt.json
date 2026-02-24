@@ -72,6 +72,8 @@
     "weatherCaptured": "Contexto meteorológico capturado.",
     "weatherUnavailable": "Não foi possível obter meteorologia agora.",
     "enableLocationForWeather": "Ative a localização para captar meteorologia.",
+    "notificationsInstallIosHint": "No iPhone/iPad, instale primeiro a app no ecrã principal e depois inicie uma volta para ativar notificações.",
+    "notificationsBlocked": "As notificações estão bloqueadas. Ative-as nas definições do navegador/app.",
     "holeHeader": "Cabeçalho do Buraco",
     "hole": "Buraco",
     "prev": "Anterior",

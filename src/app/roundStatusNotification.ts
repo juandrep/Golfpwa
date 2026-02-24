@@ -14,6 +14,33 @@ function supportsNotifications(): boolean {
   return typeof window !== 'undefined' && 'Notification' in window;
 }
 
+function isIosDevice(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  return /iPad|iPhone|iPod/.test(navigator.userAgent)
+    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+
+function isStandaloneDisplayMode(): boolean {
+  if (typeof window === 'undefined') return false;
+  const mediaStandalone = typeof window.matchMedia === 'function' && window.matchMedia('(display-mode: standalone)').matches;
+  const navStandalone = typeof navigator !== 'undefined' && 'standalone' in navigator
+    && Boolean((navigator as Navigator & { standalone?: boolean }).standalone);
+  return mediaStandalone || navStandalone;
+}
+
+export type RoundStatusNotificationAvailability =
+  | 'eligible'
+  | 'unsupported'
+  | 'requires-secure-context'
+  | 'ios-requires-home-screen';
+
+export function getRoundStatusNotificationAvailability(): RoundStatusNotificationAvailability {
+  if (!supportsNotifications()) return 'unsupported';
+  if (typeof window !== 'undefined' && !window.isSecureContext) return 'requires-secure-context';
+  if (isIosDevice() && !isStandaloneDisplayMode()) return 'ios-requires-home-screen';
+  return 'eligible';
+}
+
 async function getServiceWorkerRegistration(): Promise<ServiceWorkerRegistration | null> {
   if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return null;
 
@@ -38,7 +65,7 @@ function buildBody(payload: RoundStatusNotificationPayload): string {
 }
 
 export async function requestRoundStatusNotificationPermission(): Promise<NotificationPermission | null> {
-  if (!supportsNotifications()) return null;
+  if (getRoundStatusNotificationAvailability() !== 'eligible') return null;
   if (Notification.permission !== 'default') return Notification.permission;
   try {
     return await Notification.requestPermission();
