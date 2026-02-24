@@ -223,8 +223,8 @@ export function LiveHolePanel({ hole, teeOption = null }: Props) {
     cinematicTimersRef.current = [];
   };
 
-  const runCinematicHoleIntro = (map: maplibregl.Map) => {
-    if (followMe) return;
+  const runCinematicHoleIntro = (map: maplibregl.Map, force = false) => {
+    if (followMe && !force) return;
     clearCinematicTimers();
 
     const holeMeters = haversineMeters(teePoint, hole.green.middle);
@@ -444,7 +444,7 @@ export function LiveHolePanel({ hole, teeOption = null }: Props) {
       });
 
       frameHoleCamera(map, 0);
-      runCinematicHoleIntro(map);
+      runCinematicHoleIntro(map, true);
       map.once('render', revealHoleMap);
       readyFallbackTimer = window.setTimeout(revealHoleMap, 900);
     });
@@ -535,11 +535,17 @@ export function LiveHolePanel({ hole, teeOption = null }: Props) {
 
   useEffect(() => {
     if (!mapRef.current || !mapReadyToken) return;
-    runCinematicHoleIntro(mapRef.current);
+    runCinematicHoleIntro(mapRef.current, true);
     return () => {
       clearCinematicTimers();
     };
   }, [hole.number, mapReadyToken]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    setFollowMe(false);
+    setLayupMode(false);
+    setLayupPoint(null);
+  }, [hole.number]);
 
   useEffect(() => {
     if (!mapRef.current) return;
